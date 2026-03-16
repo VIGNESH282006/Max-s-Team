@@ -144,6 +144,61 @@
 
       <!-- TAB 3: AI Reasoning & YARA -->
       <section id="tab-ai" class="tab-content">
+        <div class="panel pipeline-panel">
+          <div class="panel-header">
+            <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18"/><path d="M6 12h12"/><path d="M10 17h4"/></svg>
+            <h2>Real-Time Detection Pipeline (5 Defense Layers)</h2>
+            <span class="panel-badge" id="pipeline-badge">Idle</span>
+          </div>
+
+          <div class="pipeline-grid" id="pipeline-grid">
+            <div class="pipeline-step pending" data-step="1">
+              <span class="pipeline-step-index">1</span>
+              <div>
+                <strong>Input Trust Guard</strong>
+                <p>Strip untrusted fields</p>
+              </div>
+            </div>
+            <div class="pipeline-step pending" data-step="2">
+              <span class="pipeline-step-index">2</span>
+              <div>
+                <strong>Probe Defense</strong>
+                <p>Rate/boundary probing checks</p>
+              </div>
+            </div>
+            <div class="pipeline-step pending" data-step="3">
+              <span class="pipeline-step-index">3</span>
+              <div>
+                <strong>Feature Hardening</strong>
+                <p>Temporal + unusual-port + canary</p>
+              </div>
+            </div>
+            <div class="pipeline-step pending" data-step="4">
+              <span class="pipeline-step-index">4</span>
+              <div>
+                <strong>Ensemble ML</strong>
+                <p>RandomForest + IsolationForest + OSINT</p>
+              </div>
+            </div>
+            <div class="pipeline-step pending" data-step="5">
+              <span class="pipeline-step-index">5</span>
+              <div>
+                <strong>LLM + Action Hardening</strong>
+                <p>Reasoning + safe playbook generation</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="pipeline-metrics">
+            <div class="pipeline-metric"><span>Event</span><strong id="pipeline-event-id">Waiting...</strong></div>
+            <div class="pipeline-metric"><span>ML Probability</span><strong id="pipeline-ml-prob">-</strong></div>
+            <div class="pipeline-metric"><span>Top Factor</span><strong id="pipeline-top-feature">-</strong></div>
+            <div class="pipeline-metric"><span>Containment</span><strong id="pipeline-action">-</strong></div>
+            <div class="pipeline-metric"><span>Last Update</span><strong id="pipeline-last-update">-</strong></div>
+          </div>
+          <div class="pipeline-stage-log" id="pipeline-stage-log">Pipeline idle. Waiting for anomaly...</div>
+        </div>
+
         <div class="split-layout">
           <div class="panel flex-2">
             <div class="panel-header">

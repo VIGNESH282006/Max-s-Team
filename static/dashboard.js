@@ -28,6 +28,14 @@
   const menuToggle = document.getElementById("menu-toggle");
   const sidebar = document.getElementById("sidebar");
   const sidebarOverlay = document.getElementById("sidebar-overlay");
+  const pipelineBadge = document.getElementById("pipeline-badge");
+  const pipelineSteps = document.querySelectorAll(".pipeline-step");
+  const pipelineEventIdEl = document.getElementById("pipeline-event-id");
+  const pipelineMlProbEl = document.getElementById("pipeline-ml-prob");
+  const pipelineTopFeatureEl = document.getElementById("pipeline-top-feature");
+  const pipelineActionEl = document.getElementById("pipeline-action");
+  const pipelineLastUpdateEl = document.getElementById("pipeline-last-update");
+  const pipelineStageLog = document.getElementById("pipeline-stage-log");
 
   let latestIncidentId = null;
   let seenIncidents = new Set();
@@ -35,6 +43,16 @@
   const startTime = Date.now();
   let firstFeedEntry = true;
   let incidentStore = {}; // store full incidents for clicking
+  let lastPipelineIncidentId = null;
+  let pipelineTimers = [];
+
+  const PIPELINE_STAGE_TEXT = [
+    "Layer 1/5: Input trust guard stripped attacker-controlled steering fields.",
+    "Layer 2/5: Probe defense evaluated request-rate and decision-boundary behavior.",
+    "Layer 3/5: Feature hardening extracted temporal, unusual-port, and canary signals.",
+    "Layer 4/5: Ensemble ML scored the event using RF + IF + OSINT guardrails.",
+    "Layer 5/5: Hardened AI reasoning selected containment and generated response artifacts.",
+  ];
 
   // ---------------------------------------------------------------------------
   // Mobile menu: toggle sidebar
@@ -90,6 +108,105 @@
   }
   setInterval(updateUptime, 1000);
   updateUptime();
+
+  // ---------------------------------------------------------------------------
+  // Real-Time Pipeline Visualization (Tab 3)
+  // ---------------------------------------------------------------------------
+  function clearPipelineTimers() {
+    pipelineTimers.forEach((t) => clearTimeout(t));
+    pipelineTimers = [];
+  }
+
+  function resetPipelineSteps() {
+    pipelineSteps.forEach((stepEl) => {
+      stepEl.classList.remove("active", "done");
+      stepEl.classList.add("pending");
+    });
+  }
+
+  function setPipelineIdle() {
+    clearPipelineTimers();
+    resetPipelineSteps();
+    if (pipelineBadge) {
+      pipelineBadge.textContent = "Idle";
+      pipelineBadge.className = "panel-badge";
+    }
+    if (pipelineEventIdEl) pipelineEventIdEl.textContent = "Waiting...";
+    if (pipelineMlProbEl) pipelineMlProbEl.textContent = "-";
+    if (pipelineTopFeatureEl) pipelineTopFeatureEl.textContent = "-";
+    if (pipelineActionEl) pipelineActionEl.textContent = "-";
+    if (pipelineLastUpdateEl) pipelineLastUpdateEl.textContent = "-";
+    if (pipelineStageLog) pipelineStageLog.textContent = "Pipeline idle. Waiting for anomaly...";
+    lastPipelineIncidentId = null;
+  }
+
+  function updatePipelineMetrics(incident) {
+    if (!incident) return;
+    const top = incident.top_features && incident.top_features.length ? incident.top_features[0] : null;
+    const prob = typeof incident.ml_probability === "number"
+      ? `${(incident.ml_probability * 100).toFixed(1)}%`
+      : "-";
+
+    pipelineEventIdEl.textContent = incident.incident_id || "unknown";
+    pipelineMlProbEl.textContent = prob;
+    pipelineTopFeatureEl.textContent = top ? `${top.feature} (${Number(top.impact || 0).toFixed(2)})` : "n/a";
+    pipelineActionEl.textContent = (incident.containment_action || "unknown").toUpperCase();
+    pipelineLastUpdateEl.textContent = new Date(incident.created_at || Date.now()).toLocaleTimeString([], { hour12: false });
+  }
+
+  function animatePipelineForIncident(incident) {
+    if (!incident || !incident.incident_id) return;
+
+    updatePipelineMetrics(incident);
+    if (lastPipelineIncidentId === incident.incident_id) {
+      if (pipelineBadge) {
+        pipelineBadge.textContent = "Contained";
+        pipelineBadge.className = "panel-badge live";
+      }
+      return;
+    }
+
+    lastPipelineIncidentId = incident.incident_id;
+    clearPipelineTimers();
+    resetPipelineSteps();
+
+    if (pipelineBadge) {
+      pipelineBadge.textContent = "Processing";
+      pipelineBadge.className = "panel-badge";
+    }
+    if (pipelineStageLog) {
+      pipelineStageLog.textContent = "Incoming anomaly detected. Starting 5-layer defense pipeline...";
+    }
+
+    pipelineSteps.forEach((stepEl, idx) => {
+      const activeTimer = setTimeout(() => {
+        stepEl.classList.remove("pending", "done");
+        stepEl.classList.add("active");
+        if (pipelineStageLog) pipelineStageLog.textContent = PIPELINE_STAGE_TEXT[idx];
+      }, idx * 500);
+      pipelineTimers.push(activeTimer);
+
+      const doneTimer = setTimeout(() => {
+        stepEl.classList.remove("active", "pending");
+        stepEl.classList.add("done");
+      }, idx * 500 + 350);
+      pipelineTimers.push(doneTimer);
+    });
+
+    const finishTimer = setTimeout(() => {
+      if (pipelineBadge) {
+        pipelineBadge.textContent = "Contained";
+        pipelineBadge.className = "panel-badge live";
+      }
+      if (pipelineStageLog) {
+        const action = (incident.containment_action || "unknown").toUpperCase();
+        pipelineStageLog.textContent = `Pipeline complete: anomaly confirmed and containment action ${action} executed.`;
+      }
+    }, PIPELINE_STAGE_TEXT.length * 500 + 200);
+    pipelineTimers.push(finishTimer);
+  }
+
+  setPipelineIdle();
 
   // ---------------------------------------------------------------------------
   // Graph setup (vis-network) — Detailed Threat Map
@@ -366,6 +483,7 @@
       undoBtn.disabled = true;
       latestIncidentId = null;
       updateThreatLevel(0);
+      setPipelineIdle();
       return;
     }
 
@@ -389,6 +507,8 @@
     if (latest.interrogation_log && latest.interrogation_log.length) {
       renderInterrogationLog(latest.interrogation_log);
     }
+
+    animatePipelineForIncident(latest);
 
     updateThreatLevel(totalAnomalies);
   }
