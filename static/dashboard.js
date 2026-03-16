@@ -320,7 +320,7 @@
       peer: { color: { background: "#f1f5f9", border: "#94a3b8", highlight: { background: "#e2e8f0", border: "#64748b" }, hover: { background: "#e2e8f0", border: "#64748b" } } },
     },
     edges: { color: { color: "#cbd5e1" }, width: 1.5, smooth: { type: "continuous" }, font: { color: "#94a3b8", size: 9, face: "JetBrains Mono" }, arrows: { to: { enabled: false } } },
-    interaction: { dragNodes: false, dragView: true, zoomView: true, hover: true },
+    interaction: { dragNodes: false, dragView: false, zoomView: false, hover: true },
   };
 
   const network = new vis.Network(networkContainer, { nodes, edges }, graphOptions);
