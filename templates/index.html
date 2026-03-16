@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>The Agentic SOC - Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/vis-network/styles/vis-network.min.css"
+  />
+</head>
+<body>
+  <div class="page">
+    <header class="header">
+      <div class="title-block">
+        <h1>The Agentic SOC</h1>
+        <p>Autonomous L1 SOC · &lt;5s detect → reason → contain</p>
+      </div>
+      <div class="metrics">
+        <div class="metric">
+          <span class="metric-label">Incidents</span>
+          <span id="incident-count" class="metric-value">0</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Estimated ROI Saved</span>
+          <span id="roi-saved" class="metric-value">$0</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel graph-panel">
+        <h2>Patient Zero Graph</h2>
+        <p class="panel-subtitle">Red = infected · Grey box = containment</p>
+        <div id="graph-wrapper">
+          <div id="network"></div>
+          <div id="containment-overlay" class="containment-overlay hidden"></div>
+        </div>
+      </section>
+
+      <section class="panel side-panel">
+        <div class="side-section live-feed">
+          <h2>Live Feed</h2>
+          <div id="feed" class="feed"></div>
+        </div>
+
+        <div class="side-section soc-panel">
+          <h2>SOC Panel</h2>
+          <div class="soc-section">
+            <h3>Latest YARA Rule</h3>
+            <pre id="yara" class="code"></pre>
+          </div>
+          <div class="soc-section">
+            <h3>Containment Controls</h3>
+            <button id="undo-btn" class="btn btn-undo" disabled>
+              UNDO CONTAINMENT
+            </button>
+            <p id="undo-status" class="status-text"></p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <script src="/static/dashboard.js"></script>
+</body>
+</html>
+
