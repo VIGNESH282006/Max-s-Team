@@ -232,6 +232,38 @@
             </div>
           </div>
         </div>
+
+        <div class="panel retraining-panel">
+          <div class="panel-header">
+            <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v5h.582m14.836 2A8.001 8.001 0 0 0 4.582 9m0 0H9m11 11v-5h-.581m0 0A8.003 8.003 0 0 1 4.582 15m14.836 0H15"/></svg>
+            <h2>Retraining Queue (Analyst Labels)</h2>
+            <span class="panel-badge" id="retraining-badge">Idle</span>
+          </div>
+
+          <div class="retraining-stats">
+            <div class="retraining-stat">
+              <span>Total Labeled</span>
+              <strong id="queue-total-count">0</strong>
+            </div>
+            <div class="retraining-stat danger">
+              <span>Anomaly Labels</span>
+              <strong id="queue-anomaly-count">0</strong>
+            </div>
+            <div class="retraining-stat success">
+              <span>Normal Labels</span>
+              <strong id="queue-normal-count">0</strong>
+            </div>
+          </div>
+
+          <div class="retraining-list-wrap">
+            <div class="retraining-list-header">
+              <span>Recent analyst-labeled incidents (ready for next retrain)</span>
+            </div>
+            <ul id="retraining-queue-list" class="retraining-queue-list">
+              <li class="retraining-empty">No analyst labels yet. Review incidents and submit labels.</li>
+            </ul>
+          </div>
+        </div>
       </section>
 
     </main>

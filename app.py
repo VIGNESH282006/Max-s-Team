@@ -222,7 +222,16 @@ def score_log_with_model(log: Dict[str, Any]) -> Dict[str, Any]:
         if if_pred == -1:
             top_features.insert(0, {"feature": "Ensemble_ZeroDay_Detector", "value": "Outlier", "impact": 0.95})
 
-    return {"prediction": pred, "probability": proba, "normalized_log": normalized, "top_features": top_features[:4]}
+    return {
+        "prediction": pred,
+        "probability": proba,
+        "normalized_log": normalized,
+        "top_features": top_features[:4],
+        "model_signals": {
+            "isolation_forest_outlier": if_pred == -1,
+            "osint_known_bad_ip": is_osint,
+        },
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -365,6 +374,7 @@ def ingest() -> Any:
         "interrogation_log": llm_result["interrogation_log"],
         "status": "contained",
         "top_features": ml_result.get("top_features", []),
+        "model_signals": ml_result.get("model_signals", {}),
     }
     INCIDENTS[incident_id] = incident
 
@@ -453,24 +463,44 @@ def undo_containment(incident_id: str) -> Any:
 @app.route("/api/feedback", methods=["POST"])
 def submit_feedback() -> Any:
     """
-    Allow SOC analysts to flag an incident as a false positive or missed anomaly.
+        Allow SOC analysts to label incidents for retraining.
+
+        Supported payloads:
+        - Legacy correction field:
+            correction = "false_positive" | "false_negative"
+        - New direct analyst label:
+            analyst_label = "anomaly" | "normal"
+
     Saves to data/feedback.jsonl for retraining.
     """
     data = request.get_json(force=True, silent=True) or {}
     incident_id = data.get("incident_id")
-    correction = data.get("correction") # 'false_positive' or 'false_negative'
+    correction = data.get("correction")
+    analyst_label = (data.get("analyst_label") or "").strip().lower()
 
     if not incident_id or incident_id not in INCIDENTS:
         return jsonify({"error": "Unknown incident_id"}), 404
 
     incident = INCIDENTS[incident_id]
-    log_data = incident["log"]
-    
-    # Correct the label
-    if correction == "false_positive":
-        log_data["is_anomaly"] = 0
+    log_data = dict(incident["log"])
+
+    final_label = None
+    # New mode: direct SOC analyst label
+    if analyst_label in ("anomaly", "normal"):
+        final_label = 1 if analyst_label == "anomaly" else 0
+    # Backward compatible mode
+    elif correction == "false_positive":
+        final_label = 0
     elif correction == "false_negative":
-        log_data["is_anomaly"] = 1
+        final_label = 1
+    else:
+        return jsonify({
+            "error": "Provide analyst_label ('anomaly'|'normal') or correction ('false_positive'|'false_negative')."
+        }), 400
+
+    log_data["is_anomaly"] = final_label
+    log_data["feedback_source_incident_id"] = incident_id
+    log_data["feedback_timestamp"] = datetime.now(timezone.utc).isoformat()
         
     feedback_file = BASE_DIR / "data" / "feedback.jsonl"
     feedback_file.parent.mkdir(parents=True, exist_ok=True)
@@ -478,7 +508,74 @@ def submit_feedback() -> Any:
         f.write(json.dumps(log_data) + "\n")
 
     incident["status"] = "feedback_logged"
-    return jsonify({"ok": True, "message": "Feedback recorded for retraining"})
+    incident["analyst_label"] = "anomaly" if final_label == 1 else "normal"
+    incident["feedback_logged_at"] = datetime.now(timezone.utc).isoformat()
+    return jsonify({
+        "ok": True,
+        "message": "Feedback recorded for retraining",
+        "incident_id": incident_id,
+        "analyst_label": incident["analyst_label"],
+    })
+
+
+@app.route("/api/retraining_queue", methods=["GET"])
+def retraining_queue() -> Any:
+    """
+    Return analyst-labeled records queued for retraining.
+
+    Reads data/feedback.jsonl and returns:
+    - total_labeled
+    - anomaly_labels
+    - normal_labels
+    - recent_items (most recent first)
+    """
+    feedback_file = BASE_DIR / "data" / "feedback.jsonl"
+    rows: List[Dict[str, Any]] = []
+
+    if feedback_file.exists():
+        with open(feedback_file, "r", encoding="utf-8") as f:
+            for line in f:
+                raw = line.strip()
+                if not raw:
+                    continue
+                try:
+                    rows.append(json.loads(raw))
+                except json.JSONDecodeError:
+                    # Skip malformed lines instead of failing the endpoint
+                    continue
+
+    total_labeled = len(rows)
+    anomaly_labels = sum(1 for r in rows if int(r.get("is_anomaly", 0) or 0) == 1)
+    normal_labels = total_labeled - anomaly_labels
+
+    # Most recent first, capped for UI performance
+    recent_rows = sorted(
+        rows,
+        key=lambda r: r.get("feedback_timestamp") or r.get("timestamp") or "",
+        reverse=True,
+    )[:50]
+
+    recent_items = []
+    for r in recent_rows:
+        recent_items.append(
+            {
+                "incident_id": r.get("feedback_source_incident_id") or "unknown",
+                "label": "anomaly" if int(r.get("is_anomaly", 0) or 0) == 1 else "normal",
+                "feedback_timestamp": r.get("feedback_timestamp"),
+                "attack_type": r.get("attack_type"),
+                "source_ip": r.get("source_ip"),
+                "dest_ip": r.get("dest_ip"),
+            }
+        )
+
+    return jsonify(
+        {
+            "total_labeled": total_labeled,
+            "anomaly_labels": anomaly_labels,
+            "normal_labels": normal_labels,
+            "recent_items": recent_items,
+        }
+    )
 
 @app.route("/api/state", methods=["GET"])
 def state() -> Any:

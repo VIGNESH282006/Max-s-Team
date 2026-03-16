@@ -36,6 +36,11 @@
   const pipelineActionEl = document.getElementById("pipeline-action");
   const pipelineLastUpdateEl = document.getElementById("pipeline-last-update");
   const pipelineStageLog = document.getElementById("pipeline-stage-log");
+  const retrainingBadge = document.getElementById("retraining-badge");
+  const queueTotalCountEl = document.getElementById("queue-total-count");
+  const queueAnomalyCountEl = document.getElementById("queue-anomaly-count");
+  const queueNormalCountEl = document.getElementById("queue-normal-count");
+  const retrainingQueueListEl = document.getElementById("retraining-queue-list");
 
   let latestIncidentId = null;
   let seenIncidents = new Set();
@@ -53,6 +58,55 @@
     "Layer 4/5: Ensemble ML scored the event using RF + IF + OSINT guardrails.",
     "Layer 5/5: Hardened AI reasoning selected containment and generated response artifacts.",
   ];
+
+  function renderRetrainingQueue(queue) {
+    if (!queue) return;
+
+    const total = Number(queue.total_labeled || 0);
+    const anomaly = Number(queue.anomaly_labels || 0);
+    const normal = Number(queue.normal_labels || 0);
+    const items = Array.isArray(queue.recent_items) ? queue.recent_items : [];
+
+    if (queueTotalCountEl) queueTotalCountEl.textContent = String(total);
+    if (queueAnomalyCountEl) queueAnomalyCountEl.textContent = String(anomaly);
+    if (queueNormalCountEl) queueNormalCountEl.textContent = String(normal);
+
+    if (retrainingBadge) {
+      retrainingBadge.textContent = total > 0 ? "Queued" : "Idle";
+      retrainingBadge.className = total > 0 ? "panel-badge live" : "panel-badge";
+    }
+
+    if (!retrainingQueueListEl) return;
+    retrainingQueueListEl.innerHTML = "";
+
+    if (!items.length) {
+      const empty = document.createElement("li");
+      empty.className = "retraining-empty";
+      empty.textContent = "No analyst labels yet. Review incidents and submit labels.";
+      retrainingQueueListEl.appendChild(empty);
+      return;
+    }
+
+    items.forEach((item) => {
+      const li = document.createElement("li");
+      li.className = "retraining-item";
+      const when = item.feedback_timestamp
+        ? new Date(item.feedback_timestamp).toLocaleTimeString([], { hour12: false })
+        : "--:--:--";
+      const labelClass = item.label === "anomaly" ? "label-anomaly" : "label-normal";
+      li.innerHTML = `
+        <div class="retraining-meta">
+          <span>${when}</span>
+          <span class="queue-label ${labelClass}">${String(item.label || "unknown").toUpperCase()}</span>
+          <span>${item.incident_id || "unknown"}</span>
+        </div>
+        <div class="retraining-text">
+          ${item.attack_type || "unknown_anomaly"} | ${item.source_ip || "unknown"} -> ${item.dest_ip || "unknown"}
+        </div>
+      `;
+      retrainingQueueListEl.appendChild(li);
+    });
+  }
 
   // ---------------------------------------------------------------------------
   // Mobile menu: toggle sidebar
@@ -137,21 +191,43 @@
     if (pipelineActionEl) pipelineActionEl.textContent = "-";
     if (pipelineLastUpdateEl) pipelineLastUpdateEl.textContent = "-";
     if (pipelineStageLog) pipelineStageLog.textContent = "Pipeline idle. Waiting for anomaly...";
+    if (pipelineMlProbEl) {
+      pipelineMlProbEl.classList.remove("value-critical", "value-high", "value-medium", "value-low");
+    }
+    if (pipelineActionEl) {
+      pipelineActionEl.classList.remove("value-isolate", "value-revoke", "value-honeypot");
+    }
     lastPipelineIncidentId = null;
   }
 
   function updatePipelineMetrics(incident) {
     if (!incident) return;
     const top = incident.top_features && incident.top_features.length ? incident.top_features[0] : null;
-    const prob = typeof incident.ml_probability === "number"
-      ? `${(incident.ml_probability * 100).toFixed(1)}%`
-      : "-";
+    const probNum = typeof incident.ml_probability === "number" ? incident.ml_probability : null;
+    const prob = probNum !== null ? `${(probNum * 100).toFixed(1)}%` : "-";
+    const topFeatureName = top && top.feature
+      ? String(top.feature).replace(/_/g, " ")
+      : "n/a";
 
     pipelineEventIdEl.textContent = incident.incident_id || "unknown";
     pipelineMlProbEl.textContent = prob;
-    pipelineTopFeatureEl.textContent = top ? `${top.feature} (${Number(top.impact || 0).toFixed(2)})` : "n/a";
-    pipelineActionEl.textContent = (incident.containment_action || "unknown").toUpperCase();
+    pipelineTopFeatureEl.textContent = top ? `${topFeatureName} (${Number(top.impact || 0).toFixed(2)})` : "n/a";
+    const action = String(incident.containment_action || "unknown").toLowerCase();
+    pipelineActionEl.textContent = action.toUpperCase();
     pipelineLastUpdateEl.textContent = new Date(incident.created_at || Date.now()).toLocaleTimeString([], { hour12: false });
+
+    pipelineMlProbEl.classList.remove("value-critical", "value-high", "value-medium", "value-low");
+    if (probNum !== null) {
+      if (probNum >= 0.85) pipelineMlProbEl.classList.add("value-critical");
+      else if (probNum >= 0.65) pipelineMlProbEl.classList.add("value-high");
+      else if (probNum >= 0.45) pipelineMlProbEl.classList.add("value-medium");
+      else pipelineMlProbEl.classList.add("value-low");
+    }
+
+    pipelineActionEl.classList.remove("value-isolate", "value-revoke", "value-honeypot");
+    if (action === "isolate") pipelineActionEl.classList.add("value-isolate");
+    if (action === "revoke") pipelineActionEl.classList.add("value-revoke");
+    if (action === "honeypot") pipelineActionEl.classList.add("value-honeypot");
   }
 
   function animatePipelineForIncident(incident) {
@@ -323,6 +399,42 @@
   // ---------------------------------------------------------------------------
   // Explanation Box Rendering (Tab 2)
   // ---------------------------------------------------------------------------
+  async function submitAnalystFeedback(incidentId, analystLabel) {
+    const statusEl = document.getElementById("feedback-status");
+    const btnThreat = document.getElementById("btn-mark-threat");
+    const btnNormal = document.getElementById("btn-mark-normal");
+    if (!incidentId || !statusEl) return;
+
+    if (btnThreat) btnThreat.disabled = true;
+    if (btnNormal) btnNormal.disabled = true;
+    statusEl.textContent = "Saving analyst decision for retraining...";
+
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ incident_id: incidentId, analyst_label: analystLabel }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        statusEl.textContent = body.error || "Failed to save feedback.";
+        if (btnThreat) btnThreat.disabled = false;
+        if (btnNormal) btnNormal.disabled = false;
+        return;
+      }
+
+      if (incidentStore[incidentId]) {
+        incidentStore[incidentId].analyst_label = analystLabel;
+      }
+      statusEl.textContent = `Feedback saved: labeled as ${analystLabel.toUpperCase()} for retraining.`;
+      fetchRetrainingQueue();
+    } catch (err) {
+      statusEl.textContent = "Network error while saving feedback.";
+      if (btnThreat) btnThreat.disabled = false;
+      if (btnNormal) btnNormal.disabled = false;
+    }
+  }
+
   function renderExplanation(incidentId) {
     const inc = incidentStore[incidentId];
     if (!inc) return;
@@ -335,24 +447,30 @@
     const attack = inc.log?.attack_type || "anomaly";
     const src = inc.log?.source_ip || "unknown";
     const target = inc.log?.dest_ip || "unknown";
+    const isoOutlier = !!inc.model_signals?.isolation_forest_outlier;
+    const osintHit = !!inc.model_signals?.osint_known_bad_ip;
+    const mlProbPct = typeof inc.ml_probability === "number" ? `${(inc.ml_probability * 100).toFixed(2)}%` : "-";
     
     let featuresHtml = "";
     if (inc.top_features && inc.top_features.length > 0) {
-      const maxImpact = Math.max(...inc.top_features.map(f => Math.abs(f.impact)));
       inc.top_features.forEach(f => {
         let valStr = typeof f.value === 'number' && !Number.isInteger(f.value) ? f.value.toFixed(2) : f.value;
-        const impactIndicator = f.impact > 0 ? "Drastically increased likelihood" : "Neutralized factors";
+        const impactIndicator = f.impact > 0 ? "Increased anomaly likelihood" : "Lowered anomaly likelihood";
         featuresHtml += `
           <li class="${f.impact < 0 ? 'bad-point' : ''}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             <div>
               <strong>${f.feature.replace("_ord", "")} (${valStr}):</strong>
-              ${impactIndicator} by a factor of ${Math.abs(f.impact).toFixed(2)}.
+              ${impactIndicator} with SHAP impact ${Math.abs(f.impact).toFixed(3)}.
             </div>
           </li>
         `;
       });
     }
+
+    const analystLabelText = inc.analyst_label
+      ? `Current analyst label: ${inc.analyst_label.toUpperCase()}`
+      : "No analyst feedback yet.";
 
     explanationBox.innerHTML = `
       <div class="exp-section">
@@ -364,6 +482,30 @@
         <ul class="point-list">
           ${featuresHtml || '<li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12.01" y2="8"/><polyline points="11 12 12 12 12 16 13 16"/></svg> Black-box ensemble outlier detected (IF Score).</li>'}
         </ul>
+      </div>
+
+      <div class="exp-section" style="margin-top: 0;">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M21 12c.552 0 1-.449.975-1-.233-5.141-4.506-9.2-9.7-8.973C7.682 2.226 4 5.932 4 10.5V12"/><path d="M3 12h18"/></svg>
+          Isolation + SHAP Threat Drivers
+        </h3>
+        <div class="model-evidence-grid">
+          <div class="evidence-card ${isoOutlier ? "evidence-on" : "evidence-off"}">
+            <span>IsolationForest Outlier</span>
+            <strong>${isoOutlier ? "YES" : "NO"}</strong>
+            <small>${isoOutlier ? "Zero-day style outlier path triggered." : "No IF outlier override on this event."}</small>
+          </div>
+          <div class="evidence-card ${osintHit ? "evidence-on" : "evidence-off"}">
+            <span>OSINT Known-Bad IP</span>
+            <strong>${osintHit ? "MATCH" : "NO MATCH"}</strong>
+            <small>${osintHit ? "Known threat intel IP detected in this flow." : "No static threat intel IP match."}</small>
+          </div>
+          <div class="evidence-card">
+            <span>ML Anomaly Probability</span>
+            <strong>${mlProbPct}</strong>
+            <small>Combined ensemble confidence for anomaly classification.</small>
+          </div>
+        </div>
       </div>
 
       <div class="exp-section" style="margin-top: 0;">
@@ -386,7 +528,29 @@
           </li>
         </ul>
       </div>
+
+      <div class="exp-section" style="margin-top: 0;">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M12 4h9"/><path d="M4 9h16"/><path d="M4 15h16"/></svg>
+          SOC Analyst Decision & Retraining Label
+        </h3>
+        <p style="margin-bottom:10px;">Review SHAP + Isolation evidence, then choose the final label for retraining.</p>
+        <div class="feedback-row">
+          <button id="btn-mark-threat" class="btn btn-success" type="button">Mark as Real Threat (Anomaly)</button>
+          <button id="btn-mark-normal" class="btn btn-neutral" type="button">Mark as Not Anomaly (Normal)</button>
+        </div>
+        <p class="status-text" id="feedback-status">${analystLabelText}</p>
+      </div>
     `;
+
+    const btnThreat = document.getElementById("btn-mark-threat");
+    const btnNormal = document.getElementById("btn-mark-normal");
+    if (btnThreat) {
+      btnThreat.addEventListener("click", () => submitAnalystFeedback(incidentId, "anomaly"));
+    }
+    if (btnNormal) {
+      btnNormal.addEventListener("click", () => submitAnalystFeedback(incidentId, "normal"));
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -462,10 +626,28 @@
 
   async function fetchState() {
     try {
-      const res = await fetch("/api/state");
-      if (!res.ok) return;
-      const state = await res.json();
+      const [stateRes, queueRes] = await Promise.all([
+        fetch("/api/state"),
+        fetch("/api/retraining_queue"),
+      ]);
+
+      if (!stateRes.ok) return;
+      const state = await stateRes.json();
       renderState(state);
+
+      if (queueRes.ok) {
+        const queue = await queueRes.json();
+        renderRetrainingQueue(queue);
+      }
+    } catch (err) { }
+  }
+
+  async function fetchRetrainingQueue() {
+    try {
+      const res = await fetch("/api/retraining_queue");
+      if (!res.ok) return;
+      const queue = await res.json();
+      renderRetrainingQueue(queue);
     } catch (err) { }
   }
 
