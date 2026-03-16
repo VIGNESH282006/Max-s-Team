@@ -1,35 +1,43 @@
 :root {
-  --bg: #050816;
-  --bg-alt: #0b1020;
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --accent: #38bdf8;
-  --accent-soft: rgba(56, 189, 248, 0.15);
-  --danger: #f97373;
-  --text: #f9fafb;
-  --muted: #9ca3af;
+  /* Light theme palette */
+  --bg: #f3f4f6;
+  --bg-alt: #ffffff;
+  --border-subtle: rgba(15, 23, 42, 0.08);
+  --accent: #2563eb;
+  --accent-soft: rgba(37, 99, 235, 0.09);
+  --danger: #dc2626;
+  --text: #0f172a;
+  --muted: #6b7280;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
     sans-serif;
-  background: radial-gradient(circle at top, #0f172a, #020617 55%);
+  background: radial-gradient(circle at top, #e5e7eb, #f9fafb 55%);
   color: var(--text);
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .page {
-  min-height: 100vh;
-  max-height: 100vh;
+  height: 100vh;
   padding: 20px 32px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow: hidden;
 }
 
 .header {
@@ -59,7 +67,7 @@ body {
 .metric {
   padding: 10px 14px;
   border-radius: 999px;
-  background: linear-gradient(135deg, var(--bg-alt), #020617);
+  background: linear-gradient(135deg, #eef2ff, #e0f2fe);
   border: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
@@ -83,10 +91,13 @@ body {
   grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr);
   gap: 20px;
   align-items: stretch;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .panel {
-  background: radial-gradient(circle at top left, #1f2937 0, var(--bg-alt) 40%);
+  background: radial-gradient(circle at top left, #e5e7eb 0, var(--bg-alt) 40%);
   border-radius: 18px;
   border: 1px solid var(--border-subtle);
   padding: 16px 18px;
@@ -107,7 +118,8 @@ body {
 .graph-panel {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 #graph-wrapper {
@@ -117,7 +129,7 @@ body {
   margin-top: 6px;
   border-radius: 14px;
   overflow: hidden;
-  background: #020617;
+  background: #f9fafb;
 }
 
 #network {
@@ -141,10 +153,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .side-section {
-  background: rgba(15, 23, 42, 0.9);
+  background: rgba(255, 255, 255, 0.95);
   border-radius: 14px;
   border: 1px solid var(--border-subtle);
   padding: 12px 12px 10px;
@@ -156,6 +170,8 @@ body {
 }
 
 .feed {
+  flex: 1;
+  min-height: 0;
   max-height: 220px;
   overflow-y: auto;
   font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
@@ -189,7 +205,7 @@ body {
   margin: 4px 0;
   padding: 8px 10px;
   border-radius: 8px;
-  background: #020617;
+  background: #f9fafb;
   border: 1px solid var(--border-subtle);
   font-size: 11px;
   max-height: 160px;

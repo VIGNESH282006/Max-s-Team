@@ -38,21 +38,24 @@
     autoResize: true,
     physics: {
       enabled: true,
-      stabilization: { iterations: 50 },
+      stabilization: { iterations: 80 },
+    },
+    layout: {
+      improvedLayout: true,
     },
     nodes: {
       shape: "dot",
-      size: 18,
+      size: 22,
       borderWidth: 2,
-      font: { color: "#f9fafb", size: 13 },
+      font: { color: "#0f172a", size: 13, face: "system-ui" },
     },
     groups: {
-      core: { color: { background: "#4b5563", border: "#f59e0b" } },
-      peer: { color: { background: "#1f2937", border: "#64748b" } },
+      core: { color: { background: "#bfdbfe", border: "#1d4ed8" } },
+      peer: { color: { background: "#e5e7eb", border: "#9ca3af" } },
     },
     edges: {
-      color: { color: "#4b5563" },
-      width: 1.2,
+      color: { color: "#cbd5f5" },
+      width: 1.4,
       smooth: {
         type: "dynamic",
       },
@@ -61,16 +64,17 @@
       dragNodes: false,
       dragView: true,
       zoomView: true,
+      hover: true,
     },
   });
 
   function setGraphHealthy() {
-    nodes.update({ id: 1, color: { background: "#4b5563", border: "#f59e0b" } });
+    nodes.update({ id: 1, color: { background: "#bfdbfe", border: "#1d4ed8" } });
     overlay.classList.add("hidden");
   }
 
   function setGraphAnomalous(containmentAction) {
-    nodes.update({ id: 1, color: { background: "#f97373", border: "#fecaca" } });
+    nodes.update({ id: 1, color: { background: "#fecaca", border: "#b91c1c" } });
     if (containmentAction === "isolate" || containmentAction === "revoke") {
       overlay.classList.remove("hidden");
     } else {
@@ -101,19 +105,17 @@
     const ts = new Date(incident.created_at || Date.now());
     const tsStr = ts.toLocaleTimeString([], { hour12: false });
 
-    const wrapper = document.createElement("div");
-    wrapper.className = "feed-entry";
-
     const meta = document.createElement("div");
     meta.className = "feed-meta";
-    meta.textContent = `[${tsStr}] ${incident.incident_id} · ${
-      incident.log?.attack_type || "anomaly"
-    } · action=${incident.containment_action}`;
+    const attack = incident.log?.attack_type || "anomaly";
+    meta.textContent = `${tsStr} | Incident ${incident.incident_id} | Attack: ${attack} | Containment: ${incident.containment_action}`;
 
     const text = document.createElement("div");
     text.className = "feed-text";
     text.textContent = incident.play_by_play_narrative;
 
+    const wrapper = document.createElement("div");
+    wrapper.className = "feed-entry";
     wrapper.appendChild(meta);
     wrapper.appendChild(text);
 
@@ -153,10 +155,16 @@
     }
 
     const latest = incidents[0];
-    const containmentAction = latest.containment_action || "isolate";
+    const containmentAction = latest.status === "undo"
+      ? "undo"
+      : (latest.containment_action || "isolate");
     latestIncidentId = latest.incident_id;
 
-    setGraphAnomalous(containmentAction);
+    if (containmentAction === "undo") {
+      setGraphHealthy();
+    } else {
+      setGraphAnomalous(containmentAction);
+    }
 
     if (latest.generated_yara_rule) {
       yaraEl.textContent = latest.generated_yara_rule;
