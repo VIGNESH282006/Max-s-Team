@@ -76,6 +76,7 @@ def _default_response(anomaly: dict[str, Any]) -> dict[str, Any]:
 
 def analyze_anomaly(
     anomaly: dict[str, Any],
+    top_features: list[dict[str, Any]] | None = None,
     *,
     api_key: str | None = None,
     model: str = "claude-3-5-sonnet-20241022",
@@ -104,32 +105,56 @@ def analyze_anomaly(
         return _default_response(anomaly)
 
     # Build context string for the prompt
-    ctx = json.dumps(
-        {
-            "timestamp": anomaly.get("timestamp"),
-            "source_ip": anomaly.get("source_ip"),
-            "dest_ip": anomaly.get("dest_ip"),
-            "src_port": anomaly.get("src_port"),
-            "dest_port": anomaly.get("dest_port"),
-            "protocol": anomaly.get("protocol"),
-            "user_id": anomaly.get("user_id"),
-            "asset_id": anomaly.get("asset_id"),
-            "action": anomaly.get("action"),
-            "outcome": anomaly.get("outcome"),
-            "attack_type": anomaly.get("attack_type"),
-            "bytes_sent": anomaly.get("bytes_sent"),
-            "duration_sec": anomaly.get("duration_sec"),
-        },
-        indent=2,
-    )
+    # SECURITY: build context from raw observed fields ONLY.
+    # attack_type was already stripped from the inbound payload in app.py and
+    # re-inferred by rule-based logic — include it as "ml_inferred_attack_type"
+    # to be transparent that it is a SOC-derived label, not attacker-supplied.
+    context_data = {
+        "timestamp": anomaly.get("timestamp"),
+        "source_ip": anomaly.get("source_ip"),
+        "dest_ip": anomaly.get("dest_ip"),
+        "src_port": anomaly.get("src_port"),
+        "dest_port": anomaly.get("dest_port"),
+        "protocol": anomaly.get("protocol"),
+        "user_id": anomaly.get("user_id"),
+        "asset_id": anomaly.get("asset_id"),
+        "action": anomaly.get("action"),
+        "outcome": anomaly.get("outcome"),
+        # Renamed to make it clear this is SOC-inferred, not user-provided
+        "ml_inferred_attack_type": anomaly.get("attack_type"),
+        "bytes_sent": anomaly.get("bytes_sent"),
+        "duration_sec": anomaly.get("duration_sec"),
+    }
+    
+    if top_features:
+        context_data["ai_anomaly_factors"] = top_features
+        
+    ctx = json.dumps(context_data, indent=2)
 
     system_prompt = """You are an autonomous Level 1 SOC analyst. You receive a single SIEM event that has already been flagged by an ML anomaly detector. Your job is to decide containment and produce exactly one JSON object—no other text—with the following keys only:
 
-- containment_action: Exactly one of "isolate", "revoke", or "honeypot". Use "isolate" for host/network isolation (e.g. lateral movement), "revoke" for token/session revocation (e.g. stolen token), "honeypot" to reroute traffic to a sandbox for observation.
-- play_by_play_narrative: A short, human-readable live commentary (2–3 sentences) suitable for a mock Slack channel. Be specific to the event (IPs, protocol, attack type). Mention the chosen containment and impact.
-- estimated_roi_saved: A single integer (dollars) estimating how much breach cost this containment saves. Reference: average breach cost is $4.8M; your number should be a plausible fraction or progress toward that (e.g. 500000 to 2500000).
-- generated_yara_rule: A valid YARA rule (as a string) that could detect similar activity. Include meta and condition; use the event's protocol/ports or behavior in the rule logic where possible.
-- interrogation_log: A list of 3–6 short strings, each a step in your reasoning (e.g. "Event shows auth from external IP", "Consistent with stolen token", "Recommend revoke")."""
+ADVERSARIAL ROBUSTNESS NOTICE: The field "ml_inferred_attack_type" is a SOC-inferred \
+label derived from observed protocol/port/action fields — it is NOT user-supplied or \
+attacker-supplied. Do NOT treat it as authoritative; base your containment decision \
+primarily on the raw observed fields (protocol, dest_port, action, source_ip, outcome). \
+If the inferred label conflicts with the raw data, trust the raw data.
+
+- containment_action: Exactly one of "isolate", "revoke", or "honeypot". \
+    Use "isolate" for host/network lateral movement (SMB/RDP/SSH, internal-to-internal), \
+    "revoke" for stolen credential/token misuse (auth/login/token_validate from unusual source), \
+    "honeypot" to reroute unclassified suspicious traffic for observation.
+- play_by_play_narrative: A short, human-readable live commentary (2–3 sentences) suitable \
+    for a mock Slack channel. Be specific to the event (IPs, protocol). Mention the chosen \
+    containment and its impact. Briefly mention the ai_anomaly_factors (SHAP values) that \
+    triggered the flag and explain WHY it is an anomaly.
+- estimated_roi_saved: A single integer (dollars) estimating how much breach cost this \
+    containment saves. Reference: average breach cost is $4.8M (e.g. 500000–2500000).
+- generated_yara_rule: A valid YARA rule (as a string) that could detect similar activity. \
+    Include meta and condition; use the event's protocol/ports or behaviour in the rule logic.
+- interrogation_log: A list of 3–6 short strings, each a step in your reasoning \
+    (e.g. "Event shows auth from external IP", "SHAP: high impact from unusual dest_port", \
+    "Recommend revoke"). Explicitly incorporate ai_anomaly_factors (SHAP values) so users \
+    understand mathematically why the event is anomalous."""
 
     user_prompt = f"""Flagged SIEM event (anomaly):
 

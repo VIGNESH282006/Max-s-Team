@@ -1,9 +1,7 @@
 // The Agentic SOC — Premium Dashboard Controller
-// - Light-mode vis-network graph with blue/red theme
-// - Animated metrics, live feed, interrogation log
-// - Threat level indicator
-// - Blockchain audit trail visualization
-// - Uptime counter
+// - Sidebar tabs layout
+// - Light-mode vis-network graph
+// - Animated metrics, live feed, AI reasoning, Detection Explanations
 
 (function () {
   // ---------------------------------------------------------------------------
@@ -24,14 +22,57 @@
   const interrogationLog = document.getElementById("interrogation-log");
   const reasoningBadge = document.getElementById("reasoning-badge");
   const feedBadge = document.getElementById("feed-badge");
-  const chainVisual = document.getElementById("chain-visual");
-  const chainStatus = document.getElementById("chain-status");
+  const explanationBox = document.getElementById("explanation-box");
+  const navItems = document.querySelectorAll(".nav-item");
+  const tabContents = document.querySelectorAll(".tab-content");
+  const menuToggle = document.getElementById("menu-toggle");
+  const sidebar = document.getElementById("sidebar");
+  const sidebarOverlay = document.getElementById("sidebar-overlay");
 
   let latestIncidentId = null;
   let seenIncidents = new Set();
   let totalAnomalies = 0;
   const startTime = Date.now();
   let firstFeedEntry = true;
+  let incidentStore = {}; // store full incidents for clicking
+
+  // ---------------------------------------------------------------------------
+  // Mobile menu: toggle sidebar
+  // ---------------------------------------------------------------------------
+  function openSidebar() {
+    sidebar.classList.add("open");
+    sidebarOverlay.classList.add("visible");
+    sidebarOverlay.setAttribute("aria-hidden", "false");
+    menuToggle.setAttribute("aria-label", "Close menu");
+  }
+  function closeSidebar() {
+    sidebar.classList.remove("open");
+    sidebarOverlay.classList.remove("visible");
+    sidebarOverlay.setAttribute("aria-hidden", "true");
+    menuToggle.setAttribute("aria-label", "Open menu");
+  }
+  menuToggle.addEventListener("click", () => {
+    if (sidebar.classList.contains("open")) closeSidebar();
+    else openSidebar();
+  });
+  sidebarOverlay.addEventListener("click", closeSidebar);
+
+  // ---------------------------------------------------------------------------
+  // Tab Switching Logic
+  // ---------------------------------------------------------------------------
+  navItems.forEach(item => {
+    item.addEventListener("click", () => {
+      // Deactivate all
+      navItems.forEach(nav => nav.classList.remove("active"));
+      tabContents.forEach(tab => tab.classList.remove("active"));
+      
+      // Activate target
+      item.classList.add("active");
+      const targetId = item.getAttribute("data-target");
+      document.getElementById(targetId).classList.add("active");
+      closeSidebar();
+    });
+  });
 
   // ---------------------------------------------------------------------------
   // Uptime clock
@@ -57,46 +98,20 @@
   const graphStatusText = document.getElementById("graph-status-text");
   const graphBadge = document.getElementById("graph-badge");
 
-  // Simulated enterprise network nodes with IPs and roles
   const nodes = new vis.DataSet([
-    {
-      id: 1,
-      label: "Patient Zero\n10.0.22.221\nWorkstation",
-      group: "core",
-      title: "Patient Zero — The initially compromised host.\nIP: 10.0.22.221\nRole: Employee workstation\nThis node originates lateral movement or stolen token attacks.",
-    },
-    {
-      id: 2,
-      label: "DB Server\n10.0.1.50\nPostgreSQL",
-      group: "peer",
-      title: "Database Server\nIP: 10.0.1.50\nRole: Primary database (PostgreSQL)\nStores sensitive customer and financial data.",
-    },
-    {
-      id: 3,
-      label: "App Server\n10.0.2.10\nFlask API",
-      group: "peer",
-      title: "Application Server\nIP: 10.0.2.10\nRole: Flask API backend\nServes the main application and handles business logic.",
-    },
-    {
-      id: 4,
-      label: "HR Portal\n10.0.3.25\nInternal App",
-      group: "peer",
-      title: "HR Portal\nIP: 10.0.3.25\nRole: Human Resources portal\nContains employee PII, payroll data, and org charts.",
-    },
-    {
-      id: 5,
-      label: "Finance\n10.0.4.100\nSAP ERP",
-      group: "peer",
-      title: "Finance System\nIP: 10.0.4.100\nRole: SAP ERP / Financial system\nManages billing, invoices, and financial transactions.",
-    },
+    { id: 1, label: "Patient Zero\n10.0.22.221\nWorkstation", group: "core" },
+    { id: 2, label: "DB Server\n10.0.1.50\nPostgreSQL", group: "peer" },
+    { id: 3, label: "App Server\n10.0.2.10\nFlask API", group: "peer" },
+    { id: 4, label: "HR Portal\n10.0.3.25\nInternal App", group: "peer" },
+    { id: 5, label: "Finance\n10.0.4.100\nSAP ERP", group: "peer" },
   ]);
 
   const edges = new vis.DataSet([
-    { id: "e1-2", from: 1, to: 2, label: "SMB", title: "SMB connection (port 445)\nPatient Zero → DB Server\nUsed for file sharing; common lateral movement vector." },
-    { id: "e1-3", from: 1, to: 3, label: "HTTPS", title: "HTTPS connection (port 443)\nPatient Zero → App Server\nAPI traffic; may carry stolen tokens." },
-    { id: "e2-4", from: 2, to: 4, label: "RDP", title: "RDP connection (port 3389)\nDB Server → HR Portal\nRemote desktop; high-risk lateral movement path." },
-    { id: "e3-5", from: 3, to: 5, label: "SSH", title: "SSH connection (port 22)\nApp Server → Finance\nSecure shell; used for admin access." },
-    { id: "e4-5", from: 4, to: 5, label: "LDAP", title: "LDAP connection (port 389)\nHR Portal → Finance\nDirectory services link; authentication path." },
+    { id: "e1-2", from: 1, to: 2, label: "SMB" },
+    { id: "e1-3", from: 1, to: 3, label: "HTTPS" },
+    { id: "e2-4", from: 2, to: 4, label: "RDP" },
+    { id: "e3-5", from: 3, to: 5, label: "SSH" },
+    { id: "e4-5", from: 4, to: 5, label: "LDAP" },
   ]);
 
   const graphOptions = {
@@ -104,158 +119,46 @@
     physics: {
       enabled: true,
       stabilization: { iterations: 120 },
-      barnesHut: {
-        gravitationalConstant: -4000,
-        centralGravity: 0.25,
-        springLength: 160,
-        springConstant: 0.035,
-        damping: 0.1,
-      },
+      barnesHut: { gravitationalConstant: -4000, centralGravity: 0.25, springLength: 160, springConstant: 0.035, damping: 0.1 },
     },
-    nodes: {
-      shape: "dot",
-      size: 28,
-      borderWidth: 3,
-      shadow: {
-        enabled: true,
-        color: "rgba(0,0,0,0.06)",
-        x: 0,
-        y: 4,
-        size: 14,
-      },
-      font: {
-        color: "#334155",
-        size: 11,
-        face: "Inter, system-ui, sans-serif",
-        multi: "md",
-        strokeWidth: 0,
-      },
-    },
+    nodes: { shape: "dot", size: 28, borderWidth: 3, font: { color: "#334155", size: 11, face: "Inter", multi: "md", strokeWidth: 0 } },
     groups: {
-      core: {
-        color: {
-          background: "#dbeafe",
-          border: "#2563eb",
-          highlight: { background: "#bfdbfe", border: "#1d4ed8" },
-          hover: { background: "#bfdbfe", border: "#1d4ed8" },
-        },
-      },
-      peer: {
-        color: {
-          background: "#f1f5f9",
-          border: "#94a3b8",
-          highlight: { background: "#e2e8f0", border: "#64748b" },
-          hover: { background: "#e2e8f0", border: "#64748b" },
-        },
-      },
+      core: { color: { background: "#dbeafe", border: "#2563eb", highlight: { background: "#bfdbfe", border: "#1d4ed8" }, hover: { background: "#bfdbfe", border: "#1d4ed8" } } },
+      peer: { color: { background: "#f1f5f9", border: "#94a3b8", highlight: { background: "#e2e8f0", border: "#64748b" }, hover: { background: "#e2e8f0", border: "#64748b" } } },
     },
-    edges: {
-      color: { color: "#cbd5e1", highlight: "#94a3b8", hover: "#94a3b8" },
-      width: 1.5,
-      smooth: { type: "continuous" },
-      font: { color: "#94a3b8", size: 9, face: "JetBrains Mono, monospace", strokeWidth: 0, align: "top" },
-      arrows: { to: { enabled: false } },
-    },
-    interaction: {
-      dragNodes: false,
-      dragView: true,
-      zoomView: true,
-      hover: true,
-      tooltipDelay: 200,
-    },
+    edges: { color: { color: "#cbd5e1" }, width: 1.5, smooth: { type: "continuous" }, font: { color: "#94a3b8", size: 9, face: "JetBrains Mono" }, arrows: { to: { enabled: false } } },
+    interaction: { dragNodes: false, dragView: true, zoomView: true, hover: true },
   };
 
   const network = new vis.Network(networkContainer, { nodes, edges }, graphOptions);
 
-  // --- Graph State Functions ---
   function setGraphHealthy() {
-    // Reset Patient Zero
-    nodes.update({
-      id: 1,
-      color: { background: "#dbeafe", border: "#2563eb" },
-    });
-    // Reset all peers to normal
-    [2, 3, 4, 5].forEach((id) => {
-      nodes.update({
-        id,
-        color: { background: "#f1f5f9", border: "#94a3b8" },
-      });
-    });
-    // Reset all edges to normal
-    edges.forEach((edge) => {
-      edges.update({
-        id: edge.id,
-        color: { color: "#cbd5e1" },
-        width: 1.5,
-        dashes: false,
-        arrows: { to: { enabled: false } },
-      });
-    });
-
+    nodes.update({ id: 1, color: { background: "#dbeafe", border: "#2563eb" } });
+    [2, 3, 4, 5].forEach((id) => { nodes.update({ id, color: { background: "#f1f5f9", border: "#94a3b8" } }); });
+    edges.forEach((edge) => { edges.update({ id: edge.id, color: { color: "#cbd5e1" }, width: 1.5, dashes: false, arrows: { to: { enabled: false } } }); });
     overlay.classList.add("hidden");
     statusBeacon.classList.remove("danger");
     graphBadge.textContent = "Live";
     graphBadge.className = "panel-badge live";
-
     graphStatusEl.className = "graph-status";
-    graphStatusText.innerHTML =
-      '<strong>Status: All Clear.</strong> The enterprise network topology shows 5 interconnected systems. ' +
-      'No anomalies detected. All nodes are healthy and operating normally.';
+    graphStatusText.innerHTML = '<strong>Status: All Clear.</strong> The enterprise network topology shows 5 interconnected systems. No anomalies detected.';
   }
 
   function setGraphAnomalous(containmentAction, incident) {
-    // Patient Zero turns red
-    nodes.update({
-      id: 1,
-      color: { background: "#fecaca", border: "#dc2626" },
-    });
-
-    // Direct neighbors (DB Server, App Server) become "at risk" (amber)
-    [2, 3].forEach((id) => {
-      nodes.update({
-        id,
-        color: { background: "#fef3c7", border: "#f59e0b" },
-      });
-    });
-
-    // Attack path edges turn red with arrows
-    ["e1-2", "e1-3"].forEach((eid) => {
-      edges.update({
-        id: eid,
-        color: { color: "#dc2626" },
-        width: 2.5,
-        dashes: [6, 3],
-        arrows: { to: { enabled: true, scaleFactor: 0.8 } },
-      });
-    });
-
+    nodes.update({ id: 1, color: { background: "#fecaca", border: "#dc2626" } });
+    [2, 3].forEach((id) => { nodes.update({ id, color: { background: "#fef3c7", border: "#f59e0b" } }); });
+    ["e1-2", "e1-3"].forEach((eid) => { edges.update({ id: eid, color: { color: "#dc2626" }, width: 2.5, dashes: [6, 3], arrows: { to: { enabled: true, scaleFactor: 0.8 } } }); });
     statusBeacon.classList.add("danger");
     graphBadge.textContent = "Threat";
     graphBadge.className = "panel-badge danger";
-
-    if (containmentAction === "isolate" || containmentAction === "revoke") {
-      overlay.classList.remove("hidden");
-    } else {
-      overlay.classList.add("hidden");
-    }
-
-    // Build detailed status text
+    if (containmentAction === "isolate" || containmentAction === "revoke") { overlay.classList.remove("hidden"); } else { overlay.classList.add("hidden"); }
     const attackType = incident?.log?.attack_type || "unknown";
     const sourceIp = incident?.log?.source_ip || "unknown";
     const destIp = incident?.log?.dest_ip || "unknown";
     const protocol = incident?.log?.protocol || "unknown";
-    const containmentText = containmentAction === "isolate"
-      ? "Network isolation has been activated — Patient Zero is now quarantined from all peers."
-      : containmentAction === "revoke"
-      ? "Token/credential revocation is in effect — compromised sessions are invalidated."
-      : "Traffic is being routed to a honeypot for observation.";
-
+    const containmentText = containmentAction === "isolate" ? "Network isolation has been activated." : containmentAction === "revoke" ? "Token revocation is in effect." : "Traffic routed to honeypot.";
     graphStatusEl.className = "graph-status danger";
-    graphStatusText.innerHTML =
-      `<strong>Alert: ${attackType.replace("_", " ").toUpperCase()} detected.</strong> ` +
-      `Source <strong>${sourceIp}</strong> attacked <strong>${destIp}</strong> via <strong>${protocol}</strong>. ` +
-      `Nodes directly connected to Patient Zero (DB Server, App Server) are marked <strong>at risk</strong>. ` +
-      containmentText;
+    graphStatusText.innerHTML = `<strong>Alert: ${attackType.replace("_", " ").toUpperCase()} detected.</strong> Source <strong>${sourceIp}</strong> attacked <strong>${destIp}</strong> via <strong>${protocol}</strong>. ${containmentText}`;
   }
 
   setGraphHealthy();
@@ -265,59 +168,33 @@
   // ---------------------------------------------------------------------------
   function updateThreatLevel(anomalyCount) {
     let level, label, colorClass;
-    if (anomalyCount === 0) {
-      level = 1; label = "Low"; colorClass = "low";
-    } else if (anomalyCount <= 2) {
-      level = 2; label = "Medium"; colorClass = "med";
-    } else if (anomalyCount <= 5) {
-      level = 3; label = "High"; colorClass = "high";
-    } else {
-      level = 5; label = "Critical"; colorClass = "crit";
-    }
+    if (anomalyCount === 0) { level = 1; label = "Low"; colorClass = "low"; }
+    else if (anomalyCount <= 2) { level = 2; label = "Medium"; colorClass = "med"; }
+    else if (anomalyCount <= 5) { level = 3; label = "High"; colorClass = "high"; }
+    else { level = 5; label = "Critical"; colorClass = "crit"; }
 
     threatLabel.textContent = label;
-    threatLabel.style.color =
-      colorClass === "low" ? "#10b981" :
-      colorClass === "med" ? "#f59e0b" :
-      colorClass === "high" ? "#f97316" : "#ef4444";
+    threatLabel.style.color = colorClass === "low" ? "#10b981" : colorClass === "med" ? "#f59e0b" : colorClass === "high" ? "#f97316" : "#ef4444";
 
     threatDots.forEach((dot, i) => {
       dot.className = "threat-dot";
-      if (i < level) {
-        dot.classList.add("active", colorClass);
-      }
+      if (i < level) { dot.classList.add("active", colorClass); }
     });
   }
-
   updateThreatLevel(0);
 
-  // ---------------------------------------------------------------------------
-  // Currency formatter
-  // ---------------------------------------------------------------------------
   function formatCurrency(value) {
-    try {
-      return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: 0,
-      }).format(value || 0);
-    } catch (e) {
-      return "$" + (value || 0).toLocaleString();
-    }
+    try { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value || 0); }
+    catch (e) { return "$" + (value || 0).toLocaleString(); }
   }
 
-  // ---------------------------------------------------------------------------
-  // Animated counter
-  // ---------------------------------------------------------------------------
   function animateValue(el, start, end, duration, formatter) {
     if (start === end) return;
     const range = end - start;
     const startTime = performance.now();
-
     function step(now) {
       const elapsed = now - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      // Ease out cubic
       const eased = 1 - Math.pow(1 - progress, 3);
       const current = start + range * eased;
       el.textContent = formatter ? formatter(current) : Math.round(current).toString();
@@ -327,16 +204,82 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Explanation Box Rendering (Tab 2)
+  // ---------------------------------------------------------------------------
+  function renderExplanation(incidentId) {
+    const inc = incidentStore[incidentId];
+    if (!inc) return;
+
+    // Reset active states in feed
+    document.querySelectorAll(".feed-entry").forEach(el => el.classList.remove("active-item"));
+    const activeEl = document.querySelector(`.feed-entry[data-id="${incidentId}"]`);
+    if (activeEl) activeEl.classList.add("active-item");
+
+    const attack = inc.log?.attack_type || "anomaly";
+    const src = inc.log?.source_ip || "unknown";
+    const target = inc.log?.dest_ip || "unknown";
+    
+    let featuresHtml = "";
+    if (inc.top_features && inc.top_features.length > 0) {
+      const maxImpact = Math.max(...inc.top_features.map(f => Math.abs(f.impact)));
+      inc.top_features.forEach(f => {
+        let valStr = typeof f.value === 'number' && !Number.isInteger(f.value) ? f.value.toFixed(2) : f.value;
+        const impactIndicator = f.impact > 0 ? "Drastically increased likelihood" : "Neutralized factors";
+        featuresHtml += `
+          <li class="${f.impact < 0 ? 'bad-point' : ''}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div>
+              <strong>${f.feature.replace("_ord", "")} (${valStr}):</strong>
+              ${impactIndicator} by a factor of ${Math.abs(f.impact).toFixed(2)}.
+            </div>
+          </li>
+        `;
+      });
+    }
+
+    explanationBox.innerHTML = `
+      <div class="exp-section">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Why is this an Anomaly?
+        </h3>
+        <p style="margin-bottom: 12px;">The signature <strong>${attack.replace("_"," ").toUpperCase()}</strong> was statistically flagged between <strong>${src}</strong> and <strong>${target}</strong> based on mathematical deviations from normal enterprise traffic.</p>
+        <ul class="point-list">
+          ${featuresHtml || '<li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12.01" y2="8"/><polyline points="11 12 12 12 12 16 13 16"/></svg> Black-box ensemble outlier detected (IF Score).</li>'}
+        </ul>
+      </div>
+
+      <div class="exp-section" style="margin-top: 0;">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          Why was it not normal traffic?
+        </h3>
+        <ul class="point-list">
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Normal traffic typically originates from corporate VPN subnets and occurs during standard business hours.
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Normal authentication events don't attempt access across multiple disparate geographical regions simultaneously.
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            The protocol frequency deviated heavily from historical distributions of the ${target} server.
+          </li>
+        </ul>
+      </div>
+    `;
+  }
+
+  // ---------------------------------------------------------------------------
   // Live Feed
   // ---------------------------------------------------------------------------
   function prependFeedEntry(incident) {
     if (!incident) return;
+    if (firstFeedEntry) { feedEl.innerHTML = ""; firstFeedEntry = false; }
 
-    // Clear the empty state on first entry
-    if (firstFeedEntry) {
-      feedEl.innerHTML = "";
-      firstFeedEntry = false;
-    }
+    incidentStore[incident.incident_id] = incident;
 
     const ts = new Date(incident.created_at || Date.now());
     const tsStr = ts.toLocaleTimeString([], { hour12: false });
@@ -344,6 +287,11 @@
 
     const wrapper = document.createElement("div");
     wrapper.className = "feed-entry anomaly";
+    wrapper.setAttribute("data-id", incident.incident_id);
+    
+    wrapper.addEventListener("click", () => {
+      renderExplanation(incident.incident_id);
+    });
 
     const meta = document.createElement("div");
     meta.className = "feed-meta";
@@ -361,15 +309,14 @@
     wrapper.appendChild(meta);
     wrapper.appendChild(text);
 
-    if (feedEl.firstChild) {
-      feedEl.insertBefore(wrapper, feedEl.firstChild);
-    } else {
-      feedEl.appendChild(wrapper);
-    }
+    if (feedEl.firstChild) { feedEl.insertBefore(wrapper, feedEl.firstChild); } 
+    else { feedEl.appendChild(wrapper); }
 
-    // Keep feed manageable
-    while (feedEl.children.length > 50) {
-      feedEl.removeChild(feedEl.lastChild);
+    while (feedEl.children.length > 50) { feedEl.removeChild(feedEl.lastChild); }
+    
+    // Auto-select latest if nothing is selected
+    if(!document.querySelector(".feed-entry.active-item")) {
+      renderExplanation(incident.incident_id);
     }
   }
 
@@ -378,7 +325,6 @@
   // ---------------------------------------------------------------------------
   function renderInterrogationLog(steps) {
     if (!steps || !steps.length) return;
-
     interrogationLog.innerHTML = "";
     reasoningBadge.textContent = "Active";
     reasoningBadge.className = "panel-badge live";
@@ -386,49 +332,9 @@
     steps.forEach((step, i) => {
       const li = document.createElement("li");
       li.className = "interrogation-step";
-
-      const num = document.createElement("span");
-      num.className = "step-number";
-      num.textContent = i + 1;
-
-      const txt = document.createElement("span");
-      txt.textContent = step;
-
-      li.appendChild(num);
-      li.appendChild(txt);
+      li.innerHTML = `<span class="step-num">[${String(i+1).padStart(2,'0')}]</span> ${step}`;
       interrogationLog.appendChild(li);
     });
-  }
-
-  // ---------------------------------------------------------------------------
-  // Blockchain Audit Trail
-  // ---------------------------------------------------------------------------
-  let blockCount = 0;
-
-  function addBlockToChain(incidentId) {
-    blockCount++;
-
-    // Add arrow
-    const arrow = document.createElement("span");
-    arrow.className = "chain-arrow";
-    arrow.textContent = "→";
-    chainVisual.appendChild(arrow);
-
-    // Add block
-    const block = document.createElement("div");
-    block.className = "chain-block";
-    block.title = `Block #${blockCount} — ${incidentId}`;
-    block.textContent = `#${blockCount}`;
-    chainVisual.appendChild(block);
-
-    // Scroll to end
-    chainVisual.scrollLeft = chainVisual.scrollWidth;
-
-    // Update chain status
-    chainStatus.innerHTML = `
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-      Chain valid · ${blockCount + 1} blocks
-    `;
   }
 
   // ---------------------------------------------------------------------------
@@ -443,9 +349,7 @@
       if (!res.ok) return;
       const state = await res.json();
       renderState(state);
-    } catch (err) {
-      console.error("state poll error", err);
-    }
+    } catch (err) { }
   }
 
   function renderState(state) {
@@ -453,15 +357,8 @@
     const count = state.incident_count || incidents.length || 0;
     const roi = state.total_roi_saved || 0;
 
-    // Animate counters
-    if (count !== prevCount) {
-      animateValue(incidentCountEl, prevCount, count, 600);
-      prevCount = count;
-    }
-    if (roi !== prevRoi) {
-      animateValue(roiEl, prevRoi, roi, 800, formatCurrency);
-      prevRoi = roi;
-    }
+    if (count !== prevCount) { animateValue(incidentCountEl, prevCount, count, 600); prevCount = count; }
+    if (roi !== prevRoi) { animateValue(roiEl, prevRoi, roi, 800, formatCurrency); prevRoi = roi; }
 
     if (!incidents.length) {
       setGraphHealthy();
@@ -473,44 +370,22 @@
     }
 
     const latest = incidents[0];
-    const containmentAction =
-      latest.status === "undo"
-        ? "undo"
-        : latest.containment_action || "isolate";
+    const containmentAction = latest.status === "undo" ? "undo" : latest.containment_action || "isolate";
     latestIncidentId = latest.incident_id;
 
-    if (containmentAction === "undo") {
-      setGraphHealthy();
-    } else {
-      setGraphAnomalous(containmentAction, latest);
-    }
-
-    if (latest.generated_yara_rule) {
-      yaraEl.textContent = latest.generated_yara_rule;
-    }
-
+    if (containmentAction === "undo") { setGraphHealthy(); } else { setGraphAnomalous(containmentAction, latest); }
+    if (latest.generated_yara_rule) { yaraEl.textContent = latest.generated_yara_rule; }
     undoBtn.disabled = !latestIncidentId;
 
-    // Process new incidents
     for (let i = incidents.length - 1; i >= 0; i--) {
       const inc = incidents[i];
       if (!seenIncidents.has(inc.incident_id)) {
         seenIncidents.add(inc.incident_id);
         totalAnomalies++;
         prependFeedEntry(inc);
-        addBlockToChain(inc.incident_id);
-
-        // Update feed badge
-        feedBadge.textContent = "Alert";
-        feedBadge.className = "panel-badge danger";
-        setTimeout(() => {
-          feedBadge.textContent = "Monitoring";
-          feedBadge.className = "panel-badge live";
-        }, 3000);
       }
     }
 
-    // Interrogation log from latest
     if (latest.interrogation_log && latest.interrogation_log.length) {
       renderInterrogationLog(latest.interrogation_log);
     }
@@ -525,32 +400,19 @@
     if (!latestIncidentId) return;
     undoBtn.disabled = true;
     undoStatus.textContent = "Reversing containment...";
-
     try {
-      const res = await fetch(`/api/contain/undo/${latestIncidentId}`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        undoStatus.textContent = "Undo failed (API error).";
-        undoBtn.disabled = false;
-        return;
-      }
+      const res = await fetch(`/api/contain/undo/${latestIncidentId}`, { method: "POST" });
+      if (!res.ok) { undoStatus.textContent = "Undo failed (API error)."; undoBtn.disabled = false; return; }
       const body = await res.json();
-      undoStatus.textContent = `Containment reversed for ${
-        body.incident?.incident_id || latestIncidentId
-      }.`;
+      undoStatus.textContent = `Containment reversed for ${body.incident?.incident_id || latestIncidentId}.`;
       setGraphHealthy();
     } catch (err) {
-      console.error("undo error", err);
       undoStatus.textContent = "Undo failed (network error).";
     }
   }
 
   undoBtn.addEventListener("click", undoContainment);
 
-  // ---------------------------------------------------------------------------
-  // Kick off
-  // ---------------------------------------------------------------------------
   fetchState();
   setInterval(fetchState, 2000);
 })();

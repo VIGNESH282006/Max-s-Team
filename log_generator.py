@@ -86,7 +86,14 @@ def _emit(log: dict) -> dict:
 # ---------------------------------------------------------------------------
 def generate_normal_logs(count: int, start_ts: datetime) -> Iterator[dict]:
     for _ in range(count):
-        ts = start_ts + timedelta(seconds=random.uniform(0, 86400))
+        # Normal traffic is uniformly distributed across the business day
+        hour = random.choices(
+            range(24),
+            weights=[1,1,1,1,1,1,1, 6,8,8,8,8, 8,8,8,8,8,8, 8,6,4,2,2,1],
+            k=1,
+        )[0]
+        base_offset = random.randint(0, 86399)
+        ts = (start_ts + timedelta(seconds=base_offset)).replace(hour=hour, minute=random.randint(0, 59))
         log = _base_log(ts)
         _emit(log)
         yield log
@@ -98,7 +105,13 @@ def generate_normal_logs(count: int, start_ts: datetime) -> Iterator[dict]:
 # ---------------------------------------------------------------------------
 def generate_stolen_token_logs(count: int, start_ts: datetime) -> Iterator[dict]:
     for _ in range(count):
-        ts = start_ts + timedelta(seconds=random.uniform(0, 86400))
+        # Stolen token attacks skew 75% toward off-hours (attacker avoids monitoring)
+        if random.random() < 0.75:
+            hour = random.choice(list(range(0, 7)) + list(range(19, 24)))
+        else:
+            hour = random.randint(7, 18)
+        base_offset = random.randint(0, 86399)
+        ts = (start_ts + timedelta(seconds=base_offset)).replace(hour=hour, minute=random.randint(0, 59))
         log = _base_log(ts)
         log["is_anomaly"] = 1
         log["attack_type"] = "stolen_token"
@@ -125,7 +138,13 @@ def generate_lateral_movement_logs(count: int, start_ts: datetime) -> Iterator[d
     victims = list(set(victims) - {patient_zero})[:15]
 
     for i in range(count):
-        ts = start_ts + timedelta(seconds=random.uniform(0, 3600))
+        # Lateral movement strongly skews toward off-hours (80% outside 7am-7pm)
+        if random.random() < 0.80:
+            hour = random.choice(list(range(0, 7)) + list(range(19, 24)))
+        else:
+            hour = random.randint(7, 18)
+        base_offset = random.randint(0, 3600)
+        ts = (start_ts + timedelta(seconds=base_offset)).replace(hour=hour, minute=random.randint(0, 59))
         log = _base_log(ts)
         log["is_anomaly"] = 1
         log["attack_type"] = "lateral_movement"
