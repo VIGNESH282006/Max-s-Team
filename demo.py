@@ -21,45 +21,74 @@ from typing import Iterable
 import requests
 
 
-API_INGEST_URL = "http://127.0.0.1:8000/api/ingest"
-LOG_PATH = Path("data/synthetic_logs.jsonl")
+import random
+from datetime import datetime, timedelta
 
-# How many events to send in the demo (None = all)
-MAX_EVENTS: int | None = 400
+from log_generator import _base_log, _emit, _random_internal_ip, _random_external_ip
+
+API_INGEST_URL = "http://127.0.0.1:8000/api/ingest"
 
 # Delay between events in seconds (tune for your demo)
-SLEEP_BETWEEN_EVENTS = 0.05  # 50ms
+SLEEP_BETWEEN_EVENTS = 0.5  # Slower stream to watch the dashboard
 
 
-def iter_logs(path: Path) -> Iterable[dict]:
-    with path.open("r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                yield json.loads(line)
-            except json.JSONDecodeError:
-                continue
+def live_log_stream() -> Iterable[dict]:
+    """Generates an infinite stream of fresh logs independent of the training data."""
+    random.seed()  # Ensure fresh randomness (don't use the training seed)
+    ts = datetime.utcnow()
+
+    # Create persistent attackers for the session so that lateral movement looks connected
+    lateral_patient_zero = _random_internal_ip()
+    lateral_victims = [_random_internal_ip() for _ in range(5)]
+
+    while True:
+        ts += timedelta(seconds=random.uniform(0.1, 2.0))
+        
+        # 85% normal, 7% stolen token, 8% lateral movement
+        choice = random.random()
+        
+        if choice < 0.85:
+            # Normal log
+            log = _base_log(ts)
+            _emit(log)
+        elif choice < 0.92:
+            # Stolen token
+            log = _base_log(ts)
+            log["is_anomaly"] = 1
+            log["attack_type"] = "stolen_token"
+            log["source_ip"] = _random_external_ip() if random.random() < 0.7 else _random_internal_ip()
+            log["dest_ip"] = _random_internal_ip()
+            log["action"] = random.choice(["auth", "login", "token_validate"])
+            log["dest_port"] = random.choice([443, 8443, 8080])
+            log["protocol"] = random.choice(["HTTPS", "HTTP"])
+            _emit(log)
+            if log.get("dest_port") == 0:
+                log["dest_port"] = 443
+        else:
+            # Lateral movement
+            log = _base_log(ts)
+            log["is_anomaly"] = 1
+            log["attack_type"] = "lateral_movement"
+            log["source_ip"] = lateral_patient_zero
+            log["dest_ip"] = random.choice(lateral_victims) if lateral_victims else _random_internal_ip()
+            log["protocol"] = random.choice(["SMB", "RDP", "SSH", "LDAP"])
+            log["dest_port"] = {"SMB": 445, "RDP": 3389, "SSH": 22, "LDAP": 389}.get(log["protocol"], 445)
+            log["action"] = "connection"
+            _emit(log)
+            
+        yield log
 
 
 def main() -> None:
-    if not LOG_PATH.exists():
-        raise SystemExit(
-            f"Log file not found at {LOG_PATH}. Run `python log_generator.py` first."
-        )
-
     print("=== Agentic SOC Demo ===")
-    print(f"Streaming events from {LOG_PATH} to {API_INGEST_URL}")
+    print(f"Streaming live generated events to {API_INGEST_URL}")
     print("Press Ctrl+C to stop.\n")
 
     sent = 0
     anomalies = 0
 
-    for log in iter_logs(LOG_PATH):
-        if MAX_EVENTS is not None and sent >= MAX_EVENTS:
-            break
-
+    # No MAX_EVENTS limit by default, runs infinitely
+    for log in live_log_stream():
         sent += 1
         t0 = time.perf_counter()
         try:

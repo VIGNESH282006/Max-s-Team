@@ -59,7 +59,7 @@ def _default_response(anomaly: dict[str, Any]) -> dict[str, Any]:
         "play_by_play_narrative": (
             f"[Auto] Anomaly detected: {attack_type}. "
             f"Source {anomaly.get('source_ip', '?')} -> {anomaly.get('dest_ip', '?')}. "
-            "Containment recommended; awaiting confirmation."
+            f"Autonomously executed {action} protocol to neutralize the threat."
         ),
         "estimated_roi_saved": 1200000,
         "generated_yara_rule": (
@@ -69,7 +69,7 @@ def _default_response(anomaly: dict[str, Any]) -> dict[str, Any]:
         "interrogation_log": [
             "ML model flagged event as anomaly.",
             f"Attack type inferred: {attack_type}.",
-            f"Default containment: {action}.",
+            f"Executed autonomous containment: {action}.",
         ],
     }
 

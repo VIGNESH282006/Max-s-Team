@@ -2,64 +2,179 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>The Agentic SOC - Dashboard</title>
+  <title>The Agentic SOC — Autonomous Security Dashboard</title>
+  <meta name="description" content="Agentic SOC: Autonomous Level-1 Security Operations Center with ML anomaly detection, AI-driven containment, and blockchain audit trail." />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="/static/style.css" />
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/vis-network/styles/vis-network.min.css"
-  />
+  <link rel="stylesheet" href="https://unpkg.com/vis-network/styles/vis-network.min.css" />
 </head>
 <body>
   <div class="page">
+
+    <!-- ===== HEADER ===== -->
     <header class="header">
-      <div class="title-block">
-        <h1>The Agentic SOC</h1>
-        <p>Autonomous L1 SOC · &lt;5s detect → reason → contain</p>
+      <div class="title-group">
+        <div id="status-beacon" class="status-beacon"></div>
+        <div class="title-block">
+          <h1>The Agentic SOC</h1>
+          <p>Autonomous L1 SOC · &lt;5s detect &rarr; reason &rarr; contain</p>
+        </div>
       </div>
-      <div class="metrics">
-        <div class="metric">
+
+      <!-- Metrics Bar -->
+      <div class="metrics-bar">
+        <div class="metric-card accent">
+          <svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           <span class="metric-label">Incidents</span>
           <span id="incident-count" class="metric-value">0</span>
         </div>
-        <div class="metric">
-          <span class="metric-label">Estimated ROI Saved</span>
+        <div class="metric-card success">
+          <svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <span class="metric-label">Avg .ROI Saved</span>
           <span id="roi-saved" class="metric-value">$0</span>
+        </div>
+        <div class="metric-card warning">
+          <svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span class="metric-label">Threat Level</span>
+          <span id="threat-level" class="metric-value">
+            <div class="threat-indicator">
+              <div class="threat-dots">
+                <div class="threat-dot" data-level="1"></div>
+                <div class="threat-dot" data-level="2"></div>
+                <div class="threat-dot" data-level="3"></div>
+                <div class="threat-dot" data-level="4"></div>
+                <div class="threat-dot" data-level="5"></div>
+              </div>
+              <span class="threat-label" id="threat-label">Low</span>
+            </div>
+          </span>
+        </div>
+        <div class="metric-card">
+          <svg class="metric-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span class="metric-label">Uptime</span>
+          <span id="uptime" class="metric-value">00:00</span>
         </div>
       </div>
     </header>
 
+    <!-- ===== MAIN LAYOUT ===== -->
     <main class="layout">
-      <section class="panel graph-panel">
-        <h2>Patient Zero Graph</h2>
-        <p class="panel-subtitle">Red = infected · Grey box = containment</p>
-        <div id="graph-wrapper">
-          <div id="network"></div>
-          <div id="containment-overlay" class="containment-overlay hidden"></div>
-        </div>
-      </section>
 
-      <section class="panel side-panel">
-        <div class="side-section live-feed">
-          <h2>Live Feed</h2>
-          <div id="feed" class="feed"></div>
-        </div>
+      <!-- Left Column -->
+      <div class="left-column">
+        <!-- Threat Network Graph -->
+        <section class="panel graph-panel">
+          <div class="panel-header">
+            <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            <h2>Threat Network Map</h2>
+            <span class="panel-badge" id="graph-badge">Live</span>
+          </div>
 
-        <div class="side-section soc-panel">
-          <h2>SOC Panel</h2>
+          <!-- Graph Legend -->
+          <div class="graph-legend">
+            <div class="legend-item">
+              <span class="legend-dot legend-dot--infected"></span>
+              <span>Compromised Host</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot legend-dot--healthy"></span>
+              <span>Healthy System</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot legend-dot--at-risk"></span>
+              <span>At Risk (1-hop)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-line legend-line--attack"></span>
+              <span>Attack Path</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-line legend-line--normal"></span>
+              <span>Network Link</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-box legend-box--contained"></span>
+              <span>Containment Zone</span>
+            </div>
+          </div>
+
+          <!-- Graph Canvas -->
+          <div id="graph-wrapper">
+            <div id="network"></div>
+            <div id="containment-overlay" class="containment-overlay hidden"></div>
+          </div>
+
+          <!-- Real-time Status Summary -->
+          <div id="graph-status" class="graph-status">
+            <div class="graph-status-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            </div>
+            <p id="graph-status-text">
+              <strong>Status: All Clear.</strong> The enterprise network topology shows 5 interconnected systems.
+              No anomalies detected. All nodes are healthy and operating normally.
+            </p>
+          </div>
+        </section>
+
+        <!-- Interrogation Log -->
+        <section class="panel" id="interrogation-panel" style="margin-top: 12px;">
+          <div class="panel-header">
+            <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <h2>AI Reasoning</h2>
+            <span class="panel-badge" id="reasoning-badge">Idle</span>
+          </div>
+          <ol id="interrogation-log" class="interrogation-log">
+            <li class="feed-empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Waiting for anomaly detection...
+            </li>
+          </ol>
+        </section>
+      </div>
+
+      <!-- Right Column -->
+      <div class="side-panel">
+        <!-- Live Feed -->
+        <section class="panel feed-panel">
+          <div class="panel-header">
+            <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <h2>Live Feed</h2>
+            <span class="panel-badge live" id="feed-badge">Monitoring</span>
+          </div>
+          <div id="feed" class="feed">
+            <div class="feed-empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+              Listening for events...
+            </div>
+          </div>
+        </section>
+
+        <!-- SOC Panel -->
+        <section class="panel soc-panel">
+          <div class="panel-header">
+            <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <h2>SOC Controls</h2>
+          </div>
+
           <div class="soc-section">
             <h3>Latest YARA Rule</h3>
-            <pre id="yara" class="code"></pre>
+            <pre id="yara" class="code">No rules generated yet.</pre>
           </div>
+
           <div class="soc-section">
-            <h3>Containment Controls</h3>
-            <button id="undo-btn" class="btn btn-undo" disabled>
-              UNDO CONTAINMENT
-            </button>
+            <h3>Containment Actions</h3>
+            <div class="controls-row">
+              <button id="undo-btn" class="btn btn-danger-outline" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                Undo Containment
+              </button>
+            </div>
             <p id="undo-status" class="status-text"></p>
           </div>
-        </div>
-      </section>
+
+        </section>
+      </div>
+
     </main>
   </div>
 
@@ -67,4 +182,3 @@
   <script src="/static/dashboard.js"></script>
 </body>
 </html>
-
