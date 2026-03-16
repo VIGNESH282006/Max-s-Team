@@ -379,6 +379,92 @@ body {
   background: rgba(16, 185, 129, 0.07);
 }
 
+/* ===== OSINT Threat Intelligence Cards ===== */
+.osint-threats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.threat-card {
+  border-radius: var(--radius-sm);
+  border-left: 4px solid;
+  padding: 12px;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.threat-card.threat-critical {
+  border-left-color: #dc2626;
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  box-shadow: 0 0 12px rgba(220, 38, 38, 0.2);
+}
+
+.threat-card.threat-high {
+  border-left-color: #f97316;
+  background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
+  box-shadow: 0 0 8px rgba(249, 115, 22, 0.15);
+}
+
+.threat-card.threat-medium {
+  border-left-color: #3b82f6;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  box-shadow: 0 0 6px rgba(59, 130, 246, 0.1);
+}
+
+.threat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.threat-header strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.threat-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.1);
+  color: #1f2937;
+  text-transform: uppercase;
+}
+
+.threat-card.threat-critical .threat-badge {
+  background: rgba(220, 38, 38, 0.3);
+  color: #7f1d1d;
+}
+
+.threat-card.threat-high .threat-badge {
+  background: rgba(249, 115, 22, 0.3);
+  color: #92400e;
+}
+
+.threat-card.threat-medium .threat-badge {
+  background: rgba(59, 130, 246, 0.3);
+  color: #1e40af;
+}
+
+.threat-detail {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #374151;
+}
+
+.threat-detail strong {
+  font-weight: 700;
+  color: #1f2937;
+}
+
 .feedback-row {
   display: flex;
   gap: 10px;
@@ -399,7 +485,7 @@ body {
 
 .pipeline-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 12px;
 }
@@ -468,7 +554,7 @@ body {
 
 .pipeline-metrics {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -530,6 +616,14 @@ body {
 
 .pipeline-metric:nth-child(5)::before {
   background: #f59e0b;
+}
+
+.pipeline-metric:nth-child(6)::before {
+  background: #0ea5a4;
+}
+
+.pipeline-metric:nth-child(7)::before {
+  background: #64748b;
 }
 
 #pipeline-action {

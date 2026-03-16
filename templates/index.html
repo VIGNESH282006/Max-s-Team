@@ -147,7 +147,7 @@
         <div class="panel pipeline-panel">
           <div class="panel-header">
             <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18"/><path d="M6 12h12"/><path d="M10 17h4"/></svg>
-            <h2>Real-Time Detection Pipeline (5 Defense Layers)</h2>
+            <h2>Incident Flow: Data -> ML -> Claude -> Frontend Decision</h2>
             <span class="panel-badge" id="pipeline-badge">Idle</span>
           </div>
 
@@ -155,36 +155,29 @@
             <div class="pipeline-step pending" data-step="1">
               <span class="pipeline-step-index">1</span>
               <div>
-                <strong>Input Trust Guard</strong>
-                <p>Strip untrusted fields</p>
+                <strong>Data Fetch</strong>
+                <p>Incoming logs and threat intel are fetched</p>
               </div>
             </div>
             <div class="pipeline-step pending" data-step="2">
               <span class="pipeline-step-index">2</span>
               <div>
-                <strong>Probe Defense</strong>
-                <p>Rate/boundary probing checks</p>
+                <strong>ML Load + Training Context</strong>
+                <p>Features are loaded and scored by the model</p>
               </div>
             </div>
             <div class="pipeline-step pending" data-step="3">
               <span class="pipeline-step-index">3</span>
               <div>
-                <strong>Feature Hardening</strong>
-                <p>Temporal + unusual-port + canary</p>
+                <strong>Claude LLM Reasoning</strong>
+                <p>Reasoning chooses best containment action</p>
               </div>
             </div>
             <div class="pipeline-step pending" data-step="4">
               <span class="pipeline-step-index">4</span>
               <div>
-                <strong>Ensemble ML</strong>
-                <p>RandomForest + IsolationForest + OSINT</p>
-              </div>
-            </div>
-            <div class="pipeline-step pending" data-step="5">
-              <span class="pipeline-step-index">5</span>
-              <div>
-                <strong>LLM + Action Hardening</strong>
-                <p>Reasoning + safe playbook generation</p>
+                <strong>Frontend Decision UI</strong>
+                <p>Decision and evidence are rendered for analysts</p>
               </div>
             </div>
           </div>
@@ -193,7 +186,9 @@
             <div class="pipeline-metric"><span>Event</span><strong id="pipeline-event-id">Waiting...</strong></div>
             <div class="pipeline-metric"><span>ML Probability</span><strong id="pipeline-ml-prob">-</strong></div>
             <div class="pipeline-metric"><span>Top Factor</span><strong id="pipeline-top-feature">-</strong></div>
-            <div class="pipeline-metric"><span>Containment</span><strong id="pipeline-action">-</strong></div>
+            <div class="pipeline-metric"><span>Claude Decision</span><strong id="pipeline-action">-</strong></div>
+            <div class="pipeline-metric"><span>Per Incident Profit</span><strong id="pipeline-profit">-</strong></div>
+            <div class="pipeline-metric"><span>Total Time</span><strong id="pipeline-total-time">-</strong></div>
             <div class="pipeline-metric"><span>Last Update</span><strong id="pipeline-last-update">-</strong></div>
           </div>
           <div class="pipeline-stage-log" id="pipeline-stage-log">Pipeline idle. Waiting for anomaly...</div>

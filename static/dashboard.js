@@ -34,6 +34,8 @@
   const pipelineMlProbEl = document.getElementById("pipeline-ml-prob");
   const pipelineTopFeatureEl = document.getElementById("pipeline-top-feature");
   const pipelineActionEl = document.getElementById("pipeline-action");
+  const pipelineProfitEl = document.getElementById("pipeline-profit");
+  const pipelineTotalTimeEl = document.getElementById("pipeline-total-time");
   const pipelineLastUpdateEl = document.getElementById("pipeline-last-update");
   const pipelineStageLog = document.getElementById("pipeline-stage-log");
   const retrainingBadge = document.getElementById("retraining-badge");
@@ -52,12 +54,17 @@
   let pipelineTimers = [];
 
   const PIPELINE_STAGE_TEXT = [
-    "Layer 1/5: Input trust guard stripped attacker-controlled steering fields.",
-    "Layer 2/5: Probe defense evaluated request-rate and decision-boundary behavior.",
-    "Layer 3/5: Feature hardening extracted temporal, unusual-port, and canary signals.",
-    "Layer 4/5: Ensemble ML scored the event using RF + IF + OSINT guardrails.",
-    "Layer 5/5: Hardened AI reasoning selected containment and generated response artifacts.",
+    "Step 1/4: Data is fetched from incoming logs and threat-intelligence context.",
+    "Step 2/4: Data is loaded and scored in the ML model stack.",
+    "Step 3/4: Claude reasoning analyzes evidence and selects a containment decision.",
+    "Step 4/4: Decision and metrics are rendered on the frontend UI for analysts.",
   ];
+
+  function formatDurationMs(ms) {
+    if (typeof ms !== "number" || Number.isNaN(ms)) return "-";
+    if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`;
+    return `${ms.toFixed(0)}ms`;
+  }
 
   function renderRetrainingQueue(queue) {
     if (!queue) return;
@@ -189,6 +196,8 @@
     if (pipelineMlProbEl) pipelineMlProbEl.textContent = "-";
     if (pipelineTopFeatureEl) pipelineTopFeatureEl.textContent = "-";
     if (pipelineActionEl) pipelineActionEl.textContent = "-";
+    if (pipelineProfitEl) pipelineProfitEl.textContent = "-";
+    if (pipelineTotalTimeEl) pipelineTotalTimeEl.textContent = "-";
     if (pipelineLastUpdateEl) pipelineLastUpdateEl.textContent = "-";
     if (pipelineStageLog) pipelineStageLog.textContent = "Pipeline idle. Waiting for anomaly...";
     if (pipelineMlProbEl) {
@@ -214,6 +223,8 @@
     pipelineTopFeatureEl.textContent = top ? `${topFeatureName} (${Number(top.impact || 0).toFixed(2)})` : "n/a";
     const action = String(incident.containment_action || "unknown").toLowerCase();
     pipelineActionEl.textContent = action.toUpperCase();
+    pipelineProfitEl.textContent = formatCurrency(Number(incident.estimated_roi_saved || 0));
+    pipelineTotalTimeEl.textContent = formatDurationMs(Number(incident.pipeline_total_ms));
     pipelineLastUpdateEl.textContent = new Date(incident.created_at || Date.now()).toLocaleTimeString([], { hour12: false });
 
     pipelineMlProbEl.classList.remove("value-critical", "value-high", "value-medium", "value-low");
@@ -276,7 +287,13 @@
       }
       if (pipelineStageLog) {
         const action = (incident.containment_action || "unknown").toUpperCase();
-        pipelineStageLog.textContent = `Pipeline complete: anomaly confirmed and containment action ${action} executed.`;
+        const stageTiming = incident.pipeline_timing_ms || {};
+        const dataMs = formatDurationMs(Number(stageTiming.data_fetch_osint));
+        const mlMs = formatDurationMs(Number(stageTiming.ml_load_train_reason));
+        const llmMs = formatDurationMs(Number(stageTiming.llm_claude_reasoning));
+        const uiMs = formatDurationMs(Number(stageTiming.frontend_prepare));
+        const totalMs = formatDurationMs(Number(incident.pipeline_total_ms));
+        pipelineStageLog.textContent = `Flow complete: Data fetched (${dataMs}) -> ML loaded/scored (${mlMs}) -> Claude reasoning (${llmMs}) -> Frontend decision shown (${uiMs}). Decision: ${action}. Total: ${totalMs}.`;
       }
     }, PIPELINE_STAGE_TEXT.length * 500 + 200);
     pipelineTimers.push(finishTimer);
@@ -451,6 +468,44 @@
     const osintHit = !!inc.model_signals?.osint_known_bad_ip;
     const mlProbPct = typeof inc.ml_probability === "number" ? `${(inc.ml_probability * 100).toFixed(2)}%` : "-";
     
+    // Render OSINT findings with threat categories
+    let osintHtml = "";
+    if (inc.osint_findings && inc.osint_findings.length > 0) {
+      osintHtml = `
+        <div class="exp-section" style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); border-left: 4px solid #dc2626; margin-top: 0;">
+          <h3 style="color: #b91c1c; margin-top: 0;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v2m0 4v2m7.07-10.07a10 10 0 0 0-14.14 0"/><path d="M12 3v3m0 12v3"/></svg>
+            OSINT Threat Intelligence Match
+          </h3>
+          <p style="color: #7f1d1d; margin: 0 0 12px 0;"><strong>Severity: ${inc.osint_severity?.toUpperCase() || 'UNKNOWN'}</strong> - ${inc.osint_summary || ''}</p>
+          <div class="osint-threats">
+      `;
+      
+      inc.osint_findings.forEach(threat => {
+        const threatType = threat.type?.toUpperCase() || 'UNKNOWN';
+        const severityClass = threat.severity === 'critical' ? 'threat-critical' : threat.severity === 'high' ? 'threat-high' : 'threat-medium';
+        const categories = threat.categories?.join(', ') || 'Unknown';
+        const sources = threat.sources?.join(', ') || 'Unknown';
+        
+        osintHtml += `
+          <div class="threat-card ${severityClass}">
+            <div class="threat-header">
+              <strong>${threatType}</strong>
+              <span class="threat-badge">${threat.severity?.toUpperCase() || 'UNKNOWN'}</span>
+            </div>
+            <div class="threat-detail"><strong>Indicator:</strong> ${threat.indicator}</div>
+            <div class="threat-detail"><strong>Categories:</strong> ${categories}</div>
+            <div class="threat-detail"><strong>Sources:</strong> ${sources}</div>
+          </div>
+        `;
+      });
+      
+      osintHtml += `
+          </div>
+        </div>
+      `;
+    }
+    
     let featuresHtml = "";
     if (inc.top_features && inc.top_features.length > 0) {
       inc.top_features.forEach(f => {
@@ -473,6 +528,8 @@
       : "No analyst feedback yet.";
 
     explanationBox.innerHTML = `
+      ${osintHtml}
+      
       <div class="exp-section">
         <h3>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>

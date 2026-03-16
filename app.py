@@ -28,6 +28,7 @@ from flask import Flask, jsonify, request, render_template
 
 from claude_reasoning import analyze_anomaly
 from train_model import build_features
+from osint import analyze_ioc, get_threat_intelligence
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -308,7 +309,9 @@ def index() -> Any:
 @app.route("/api/ingest", methods=["POST"])
 def ingest() -> Any:
     """
-    Receive a log event and run ML -> Claude pipeline.
+    Receive a log event and run OSINT -> ML -> Claude pipeline.
+    OSINT threat intelligence is cross-referenced BEFORE ML processing
+    to catch known threats instantly (dark-web IPs, C2 servers, IOC feeds).
     Returns an incident object if anomalous, or a normal-response otherwise.
     """
     try:
@@ -320,10 +323,30 @@ def ingest() -> Any:
         return jsonify({"error": "Expected a JSON object"}), 400
 
     source_ip = payload.get("source_ip", "unknown") if isinstance(payload, dict) else "unknown"
+    pipeline_started = time.perf_counter()
+    
+    # ===== STAGE 1: OSINT THREAT INTELLIGENCE LOOKUP =====
+    # Cross-reference against dark-web IPs, C2 servers, IOC feeds BEFORE ML processing
+    stage_osint_started = time.perf_counter()
+    osint_result = analyze_ioc(payload)
+    stage_osint_ms = (time.perf_counter() - stage_osint_started) * 1000
+    is_osint_hit = osint_result.get("is_ioс", False)  # "Indicator of Compromise" flag
+    
+    if is_osint_hit:
+        print(f"[OSINT HIT] Threat intelligence match: {osint_result.get('summary')}")
+    
+    # ===== STAGE 2: ML ANOMALY DETECTION =====
+    stage_ml_started = time.perf_counter()
     ml_result = score_log_with_model(payload)
-    is_anomaly = ml_result["prediction"] == 1
+    stage_ml_ms = (time.perf_counter() - stage_ml_started) * 1000
+    is_anomaly = ml_result["prediction"] == 1 or is_osint_hit  # Escalate if OSINT finds threat
+    
+    # If OSINT found IOC, boost ML probability to ensure incident is created
+    if is_osint_hit and not is_anomaly:
+        ml_result["probability"] = max(ml_result["probability"], 0.99)
+        is_anomaly = True
 
-    # --- Adversarial probe detection (runs on every request, anomaly or not) ---
+    # ===== STAGE 3: ADVERSARIAL PROBE DETECTION =====
     probe_info = _check_probe_attack(str(source_ip), ml_result["probability"])
     if probe_info["is_probe"]:
         # Log to console; in production send to SIEM/alerting
@@ -337,6 +360,7 @@ def ingest() -> Any:
                 "ml_probability": ml_result["probability"],
                 "message": "Event scored as normal traffic.",
                 "probe_detection": probe_info,
+                "osint_result": osint_result,
             }
         )
 
@@ -354,7 +378,26 @@ def ingest() -> Any:
     else:
         anomaly_log["attack_type"] = "unknown_anomaly"
 
-    llm_result = analyze_anomaly(anomaly_log, top_features=ml_result.get("top_features", []))
+    # Prepare top features with OSINT findings prioritized
+    top_features = ml_result.get("top_features", [])
+    
+    # Prepend OSINT findings to top_features so Claude considers them prominently
+    if osint_result.get("threats_found"):
+        for threat in osint_result["threats_found"]:
+            osint_feature = {
+                "feature": f"OSINT_{threat.get('type', 'unknown').upper()}",
+                "value": threat.get("indicator", ""),
+                "impact": 0.99 if threat.get("severity") == "critical" else 0.85,
+                "osint_source": threat.get("sources", []),
+                "osint_category": threat.get("categories", []),
+            }
+            top_features.insert(0, osint_feature)
+
+    stage_llm_started = time.perf_counter()
+    llm_result = analyze_anomaly(anomaly_log, top_features=top_features)
+    stage_llm_ms = (time.perf_counter() - stage_llm_started) * 1000
+
+    stage_frontend_prepare_started = time.perf_counter()
 
     global TOTAL_ROI_SAVED
     roi = float(llm_result.get("estimated_roi_saved", 0) or 0)
@@ -375,7 +418,20 @@ def ingest() -> Any:
         "status": "contained",
         "top_features": ml_result.get("top_features", []),
         "model_signals": ml_result.get("model_signals", {}),
+        "osint_findings": osint_result.get("threats_found", []),
+        "osint_severity": osint_result.get("severity", "clean"),
+        "osint_is_ioc": osint_result.get("is_ioс", False),
+        "osint_summary": osint_result.get("summary", ""),
     }
+    stage_frontend_prepare_ms = (time.perf_counter() - stage_frontend_prepare_started) * 1000
+    incident["pipeline_timing_ms"] = {
+        "data_fetch_osint": round(stage_osint_ms, 2),
+        "ml_load_train_reason": round(stage_ml_ms, 2),
+        "llm_claude_reasoning": round(stage_llm_ms, 2),
+        "frontend_prepare": round(stage_frontend_prepare_ms, 2),
+    }
+    incident["pipeline_total_ms"] = round((time.perf_counter() - pipeline_started) * 1000, 2)
+
     INCIDENTS[incident_id] = incident
 
     # Generate the playbook script
