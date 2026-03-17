@@ -159,9 +159,39 @@ def _ensure_log_defaults(log: Dict[str, Any]) -> Dict[str, Any]:
     out.setdefault("outcome", "success")
     out.setdefault("bytes_sent", 0)
     out.setdefault("duration_sec", 0.1)
+    out.setdefault("failed_login_attempts", 0)
+    out.setdefault("request_frequency", 1)
+    out.setdefault("user_privilege", "user")
     # SECURITY: always strip user-supplied attack_type — re-inferred later
     out["attack_type"] = None
     return out
+
+
+SHAP_DISPLAY_NAME_MAP: Dict[str, str] = {
+    "source_ip_reputation_score": "Source IP Reputation Score",
+    "dest_port": "Destination Port",
+    "protocol_type": "Protocol Type",
+    "packet_size_payload_length": "Packet Size / Payload Length",
+    "connection_duration": "Connection Duration",
+    "failed_login_attempts": "Failed Login Attempts",
+    "data_transfer_volume": "Data Transfer Volume",
+    "user_privilege_level": "User Privilege Level",
+    "geo_location_of_ip": "Geo-location of IP",
+    "request_frequency": "Request Frequency",
+}
+
+SHAP_PRIORITY_FEATURES: List[str] = [
+    "source_ip_reputation_score",
+    "dest_port",
+    "protocol_type",
+    "packet_size_payload_length",
+    "connection_duration",
+    "failed_login_attempts",
+    "data_transfer_volume",
+    "user_privilege_level",
+    "geo_location_of_ip",
+    "request_frequency",
+]
 
 
 def score_log_with_model(log: Dict[str, Any]) -> Dict[str, Any]:
@@ -209,25 +239,28 @@ def score_log_with_model(log: Dict[str, Any]) -> Dict[str, Any]:
                sv = sv[:, 1] if sv.shape[1] > 1 else sv
             
         abs_sv = np.abs(sv)
-        top_indices = np.argsort(abs_sv)[::-1][:3] # Top 3 features
         feature_names = X.columns
+        priority_indices = [
+            idx for idx, name in enumerate(feature_names) if str(name) in SHAP_PRIORITY_FEATURES
+        ]
+        if priority_indices:
+            top_indices = sorted(priority_indices, key=lambda idx: abs_sv[idx], reverse=True)[:10]
+        else:
+            top_indices = np.argsort(abs_sv)[::-1][:10]  # Fallback if schema drifts
         for i in top_indices:
+            raw_name = str(feature_names[i])
             top_features.append({
-                "feature": str(feature_names[i]),
+                "feature": SHAP_DISPLAY_NAME_MAP.get(raw_name, raw_name),
+                "raw_feature": raw_name,
                 "value": float(X.iloc[0, i]),
                 "impact": float(sv[i])
             })
-            
-        if is_osint:
-            top_features.insert(0, {"feature": "OSINT_Intel", "value": "Known Bad IP", "impact": 1.0})
-        if if_pred == -1:
-            top_features.insert(0, {"feature": "Ensemble_ZeroDay_Detector", "value": "Outlier", "impact": 0.95})
 
     return {
         "prediction": pred,
         "probability": proba,
         "normalized_log": normalized,
-        "top_features": top_features[:4],
+        "top_features": top_features[:10],
         "model_signals": {
             "isolation_forest_outlier": if_pred == -1,
             "osint_known_bad_ip": is_osint,
@@ -411,6 +444,11 @@ def ingest() -> Any:
         "ml_prediction": ml_result["prediction"],
         "ml_probability": ml_result["probability"],
         "containment_action": llm_result["containment_action"],
+        "threat_level": llm_result.get("threat_level", "High"),
+        "attack_type_classification": llm_result.get("attack_type", "Unknown"),
+        "key_shap_features": llm_result.get("key_shap_features", []),
+        "llm_explanation": llm_result.get("explanation", ""),
+        "recommended_soc_actions": llm_result.get("recommended_soc_actions", []),
         "play_by_play_narrative": llm_result["play_by_play_narrative"],
         "estimated_roi_saved": llm_result["estimated_roi_saved"],
         "generated_yara_rule": llm_result["generated_yara_rule"],
