@@ -37,6 +37,46 @@ def _is_internal(ip: str) -> int:
     return 1 if any(ip.startswith(p) for p in ("10.0.", "192.168.", "172.16.")) else 0
 
 
+def _source_ip_reputation_score(ip: str) -> float:
+    """Return a bounded reputation score in [0, 1] for source IP.
+
+    0.0 = poor reputation (likely risky), 1.0 = high reputation.
+    """
+    if not isinstance(ip, str) or not ip:
+        return 0.5
+    if _is_internal(ip):
+        return 0.8
+    # RFC5737 documentation ranges used as known-test malicious examples in this project.
+    if any(ip.startswith(prefix) for prefix in ("203.0.113.", "198.51.100.")):
+        return 0.1
+    return 0.45
+
+
+def _geo_location_score(ip: str) -> float:
+    """Coarse geolocation risk score proxy in [0, 1].
+
+    Higher values imply more expected/low-risk location context.
+    """
+    if not isinstance(ip, str) or not ip:
+        return 0.5
+    if _is_internal(ip):
+        return 0.9
+    # Simulated higher-risk zones for demo IP ranges.
+    if any(ip.startswith(prefix) for prefix in ("185.", "45.", "102.")):
+        return 0.25
+    return 0.5
+
+
+def _user_privilege_level(value: object) -> float:
+    """Map privilege label to numeric level: guest=0, user=1, admin=2."""
+    raw = str(value or "user").strip().lower()
+    if raw in ("admin", "administrator", "root", "domain_admin"):
+        return 2.0
+    if raw in ("guest", "anonymous", "temp"):
+        return 0.0
+    return 1.0
+
+
 def load_logs(path: Path) -> pd.DataFrame:
     """Load JSONL logs into a DataFrame."""
     rows = []
@@ -89,6 +129,40 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
         lambda x: OUTCOMES_ORDER.index(x) if x in OUTCOMES_ORDER else -1
     )
 
+    # SHAP-focused security features (10 requested analyst-facing factors)
+    df["source_ip_reputation_score"] = df["source_ip"].map(_source_ip_reputation_score)
+    df["protocol_type"] = df["protocol_ord"]
+    df["packet_size_payload_length"] = df["bytes_sent"]
+    df["connection_duration"] = df["duration_sec"]
+    failed_attempts_src = (
+        df["failed_login_attempts"]
+        if "failed_login_attempts" in df.columns
+        else pd.Series(0, index=df.index)
+    )
+    df["failed_login_attempts"] = pd.to_numeric(
+        failed_attempts_src, errors="coerce"
+    ).fillna(0)
+    auth_like = df["action"].astype(str).isin(["auth", "login", "token_validate"])
+    failed_outcome = df["outcome"].astype(str).eq("failure")
+    inferred_failed_attempt = (auth_like & failed_outcome).astype(int)
+    df["failed_login_attempts"] = np.maximum(df["failed_login_attempts"], inferred_failed_attempt)
+    df["data_transfer_volume"] = df["bytes_sent"]
+    user_privilege_src = (
+        df["user_privilege"]
+        if "user_privilege" in df.columns
+        else pd.Series("user", index=df.index)
+    )
+    df["user_privilege_level"] = user_privilege_src.map(_user_privilege_level)
+    df["geo_location_of_ip"] = df["source_ip"].map(_geo_location_score)
+    request_freq_src = (
+        df["request_frequency"]
+        if "request_frequency" in df.columns
+        else pd.Series(1, index=df.index)
+    )
+    df["request_frequency"] = pd.to_numeric(
+        request_freq_src, errors="coerce"
+    ).fillna(1)
+
     # Temporal features — hard for an attacker to fake (server-side clock)
     def _parse_hour(ts: object) -> int:
         if not ts or not isinstance(ts, str):
@@ -108,11 +182,23 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     df["canary_feature"] = 0
 
     feature_cols = [
+        # 10 analyst-requested SHAP features
+        "source_ip_reputation_score",
+        "dest_port",
+        "protocol_type",
+        "packet_size_payload_length",
+        "connection_duration",
+        "failed_login_attempts",
+        "data_transfer_volume",
+        "user_privilege_level",
+        "geo_location_of_ip",
+        "request_frequency",
+
+        # Existing robustness and SOC model features
         "source_internal",
         "dest_internal",
         "bytes_sent",
         "duration_sec",
-        "dest_port",
         "src_port",
         "dest_port_high_risk",
         "dest_port_unusual",

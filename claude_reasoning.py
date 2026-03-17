@@ -23,6 +23,14 @@ BREACH_COST_REFERENCE = 4_800_000
 
 # Valid containment actions
 CONTAINMENT_ACTIONS = ("isolate", "revoke", "honeypot")
+FALLBACK_ATTACK_TYPE_LABELS = (
+    "Brute Force",
+    "Data Exfiltration",
+    "DDoS",
+    "Port Scan",
+    "Malware Activity",
+    "Unknown",
+)
 
 
 def _extract_json(text: str) -> dict[str, Any]:
@@ -45,17 +53,144 @@ def _extract_json(text: str) -> dict[str, Any]:
     return {}
 
 
-def _default_response(anomaly: dict[str, Any]) -> dict[str, Any]:
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _infer_fallback_attack_type(anomaly: dict[str, Any]) -> str:
+    """Map raw event fields to one of the exact user-facing attack labels."""
+    internal_type = str(anomaly.get("attack_type") or "").strip().lower()
+    action = str(anomaly.get("action") or "").strip().lower()
+    outcome = str(anomaly.get("outcome") or "").strip().lower()
+    protocol = str(anomaly.get("protocol") or "").strip().upper()
+    dest_port = int(_safe_float(anomaly.get("dest_port"), 0))
+    bytes_sent = _safe_float(anomaly.get("bytes_sent"), 0.0)
+    request_frequency = _safe_float(anomaly.get("request_frequency"), 0.0)
+    failed_logins = _safe_float(anomaly.get("failed_login_attempts"), 0.0)
+
+    if internal_type in ("lateral_movement", "stolen_token", "unknown_anomaly"):
+        return "Malware Activity"
+
+    if action in ("auth", "login", "token_validate") and (failed_logins >= 3 or outcome == "failure"):
+        return "Brute Force"
+
+    if bytes_sent >= 50000 or (bytes_sent >= 10000 and dest_port in (21, 22, 443, 3306, 5432, 5984, 6379)):
+        return "Data Exfiltration"
+
+    if request_frequency >= 100:
+        return "DDoS"
+
+    if request_frequency >= 20 and dest_port in (22, 23, 80, 135, 139, 443, 445, 3389):
+        return "Port Scan"
+
+    if protocol in ("SMB", "RDP", "SSH", "LDAP") or dest_port in (22, 389, 445, 3389):
+        return "Malware Activity"
+
+    return "Unknown"
+
+
+def _normalize_attack_type_label(value: Any, anomaly: dict[str, Any]) -> str:
+    """Normalize attack type text into one of the exact supported labels."""
+    raw = str(value or "").strip().lower()
+    mapping = {
+        "brute force": "Brute Force",
+        "bruteforce": "Brute Force",
+        "credential stuffing": "Brute Force",
+        "data exfiltration": "Data Exfiltration",
+        "exfiltration": "Data Exfiltration",
+        "ddos": "DDoS",
+        "dos": "DDoS",
+        "port scan": "Port Scan",
+        "portscan": "Port Scan",
+        "recon": "Port Scan",
+        "malware activity": "Malware Activity",
+        "malware": "Malware Activity",
+        "lateral_movement": "Malware Activity",
+        "stolen_token": "Malware Activity",
+        "unknown_anomaly": "Malware Activity",
+        "unknown": "Unknown",
+    }
+    normalized = mapping.get(raw)
+    if normalized:
+        return normalized
+    return _infer_fallback_attack_type(anomaly)
+
+
+def _default_response(
+    anomaly: dict[str, Any],
+    top_features: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Fallback when API is unavailable or response is invalid."""
-    attack_type = anomaly.get("attack_type") or "unknown"
-    if attack_type == "stolen_token":
+    internal_attack_type = str(anomaly.get("attack_type") or "unknown")
+    attack_type = _infer_fallback_attack_type(anomaly)
+    if internal_attack_type == "stolen_token":
         action = "revoke"
-    elif attack_type == "lateral_movement":
+    elif internal_attack_type == "lateral_movement":
         action = "isolate"
+    elif attack_type == "Brute Force":
+        action = "revoke"
+    elif attack_type in ("Data Exfiltration", "Malware Activity"):
+        action = "isolate"
+    elif attack_type == "Port Scan":
+        action = "honeypot"
     else:
         action = "isolate"
+
+    shap_features = top_features or []
+    key_shap_features = [
+        str(item.get("feature", "")).strip()
+        for item in shap_features[:5]
+        if str(item.get("feature", "")).strip()
+    ]
+
+    if key_shap_features:
+        explanation = (
+            f"Anomalous event detected for {attack_type} from "
+            f"{anomaly.get('source_ip', '?')} to {anomaly.get('dest_ip', '?')}. "
+            f"The strongest SHAP drivers were {', '.join(key_shap_features[:3])}. "
+            f"Selected containment action: {action}."
+        )
+    else:
+        explanation = (
+            f"Anomalous event detected for {attack_type} from "
+            f"{anomaly.get('source_ip', '?')} to {anomaly.get('dest_ip', '?')}. "
+            f"Selected containment action: {action}."
+        )
+
+    recommended_soc_actions = [f"Execute containment action: {action}"]
+    if action == "isolate":
+        recommended_soc_actions.append("Block or quarantine the suspicious source host/IP")
+    if action == "revoke":
+        recommended_soc_actions.append("Force credential reset and revoke active sessions")
+    if attack_type == "Brute Force":
+        recommended_soc_actions.append("Investigate user authentication activity and failed logins")
+    if attack_type in ("Data Exfiltration", "Malware Activity"):
+        recommended_soc_actions.append("Review east-west traffic and access to sensitive assets")
+    if attack_type == "Port Scan":
+        recommended_soc_actions.append("Monitor scanning source and collect additional indicators")
+    if attack_type == "DDoS":
+        recommended_soc_actions.append("Rate-limit or upstream-block high-volume traffic sources")
+    recommended_soc_actions.append("Hunt for related indicators across the environment")
+
+    interrogation_log = ["ML model flagged event as anomaly."]
+    if key_shap_features:
+        interrogation_log.append(f"Top SHAP features: {', '.join(key_shap_features[:3])}.")
+    interrogation_log.append(f"Attack type inferred: {attack_type}.")
+    interrogation_log.append(f"Executed autonomous containment: {action}.")
+
+    explanation = (
+        explanation
+    )
     return {
         "containment_action": action,
+        "threat_level": "High",
+        "attack_type": attack_type,
+        "key_shap_features": key_shap_features,
+        "explanation": explanation,
+        "recommended_soc_actions": recommended_soc_actions,
         "play_by_play_narrative": (
             f"[Auto] Anomaly detected: {attack_type}. "
             f"Source {anomaly.get('source_ip', '?')} -> {anomaly.get('dest_ip', '?')}. "
@@ -66,11 +201,7 @@ def _default_response(anomaly: dict[str, Any]) -> dict[str, Any]:
             f"rule SOC_Anomaly_{attack_type.upper().replace(' ', '_')} {{\n"
             "  meta:\n    description = \"Agentic SOC auto-generated rule\"\n  condition:\n    false\n}"
         ),
-        "interrogation_log": [
-            "ML model flagged event as anomaly.",
-            f"Attack type inferred: {attack_type}.",
-            f"Executed autonomous containment: {action}.",
-        ],
+        "interrogation_log": interrogation_log,
     }
 
 
@@ -102,7 +233,7 @@ def analyze_anomaly(
     load_dotenv(override=False)
     key = api_key or os.environ.get("ANTHROPIC_API_KEY")
     if not key or not anthropic:
-        return _default_response(anomaly)
+        return _default_response(anomaly, top_features)
 
     # Build context string for the prompt
     # SECURITY: build context from raw observed fields ONLY.
@@ -131,7 +262,7 @@ def analyze_anomaly(
         
     ctx = json.dumps(context_data, indent=2)
 
-    system_prompt = """You are an autonomous Level 1 SOC analyst. You receive a single SIEM event that has already been flagged by an ML anomaly detector. Your job is to decide containment and produce exactly one JSON object—no other text—with the following keys only:
+    system_prompt = """You are an autonomous Level 1 SOC analyst. You receive a single SIEM event that has already been flagged by an ML anomaly detector. Your job is to analyze SHAP explanations, classify the threat, and produce exactly one JSON object—no other text—with the following keys only:
 
 ADVERSARIAL ROBUSTNESS NOTICE: The field "ml_inferred_attack_type" is a SOC-inferred \
 label derived from observed protocol/port/action fields — it is NOT user-supplied or \
@@ -139,6 +270,11 @@ attacker-supplied. Do NOT treat it as authoritative; base your containment decis
 primarily on the raw observed fields (protocol, dest_port, action, source_ip, outcome). \
 If the inferred label conflicts with the raw data, trust the raw data.
 
+- threat_level: Exactly one of "Low", "Medium", "High", "Critical".
+- attack_type: Exactly one of "Brute Force", "Data Exfiltration", "DDoS", "Port Scan", "Malware Activity", or "Unknown".
+- key_shap_features: Array of up to 10 concise strings naming the highest-impact SHAP features.
+- explanation: 2-4 concise sentences explaining why the alert occurred based on SHAP contributions and event context.
+- recommended_soc_actions: Array of 3-6 concise SOC actions (for example: block IP, isolate host, investigate user activity, force password reset).
 - containment_action: Exactly one of "isolate", "revoke", or "honeypot". \
     Use "isolate" for host/network lateral movement (SMB/RDP/SSH, internal-to-internal), \
     "revoke" for stolen credential/token misuse (auth/login/token_validate from unusual source), \
@@ -160,7 +296,7 @@ If the inferred label conflicts with the raw data, trust the raw data.
 
 {ctx}
 
-Respond with exactly one JSON object containing: containment_action, play_by_play_narrative, estimated_roi_saved, generated_yara_rule, interrogation_log. No markdown, no explanation outside the JSON."""
+Respond with exactly one JSON object containing: threat_level, attack_type, key_shap_features, explanation, recommended_soc_actions, containment_action, play_by_play_narrative, estimated_roi_saved, generated_yara_rule, interrogation_log. No markdown, no explanation outside the JSON."""
 
     try:
         client = anthropic.Anthropic(api_key=key)
@@ -176,27 +312,42 @@ Respond with exactly one JSON object containing: containment_action, play_by_pla
             else ""
         )
     except Exception:
-        return _default_response(anomaly)
+        return _default_response(anomaly, top_features)
 
     out = _extract_json(text)
     if not out:
-        return _default_response(anomaly)
+        return _default_response(anomaly, top_features)
 
     # Normalize and validate
     action = (out.get("containment_action") or "isolate").strip().lower()
     if action not in CONTAINMENT_ACTIONS:
         action = "isolate"
+    fallback = _default_response(anomaly, top_features)
     return {
         "containment_action": action,
+        "threat_level": str(out.get("threat_level", "High")).strip() or "High",
+        "attack_type": _normalize_attack_type_label(out.get("attack_type", "Unknown"), anomaly),
+        "key_shap_features": (
+            list(out["key_shap_features"])
+            if isinstance(out.get("key_shap_features"), list)
+            else fallback["key_shap_features"]
+        ),
+        "explanation": str(out.get("explanation", "")).strip()
+        or fallback["explanation"],
+        "recommended_soc_actions": (
+            list(out["recommended_soc_actions"])
+            if isinstance(out.get("recommended_soc_actions"), list)
+            else fallback["recommended_soc_actions"]
+        ),
         "play_by_play_narrative": str(out.get("play_by_play_narrative", "")).strip()
-        or _default_response(anomaly)["play_by_play_narrative"],
+        or fallback["play_by_play_narrative"],
         "estimated_roi_saved": int(out.get("estimated_roi_saved", 0)) or 1_200_000,
         "generated_yara_rule": str(out.get("generated_yara_rule", "")).strip()
-        or _default_response(anomaly)["generated_yara_rule"],
+        or fallback["generated_yara_rule"],
         "interrogation_log": (
             list(out["interrogation_log"])
             if isinstance(out.get("interrogation_log"), list)
-            else _default_response(anomaly)["interrogation_log"]
+            else fallback["interrogation_log"]
         ),
     }
 
