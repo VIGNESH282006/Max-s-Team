@@ -416,8 +416,8 @@
   updateThreatLevel(0);
 
   function formatCurrency(value) {
-    try { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value || 0); }
-    catch (e) { return "$" + (value || 0).toLocaleString(); }
+    try { return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value || 0); }
+    catch (e) { return "₹" + (value || 0).toLocaleString(); }
   }
 
   function animateValue(el, start, end, duration, formatter) {

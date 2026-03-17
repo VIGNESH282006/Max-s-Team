@@ -47,6 +47,12 @@ def _random_internal_ip() -> str:
 
 
 def _random_external_ip() -> str:
+    # 10% chance to return a known OSINT bad IP to trigger the dashboard card
+    if random.random() < 0.10:
+        return random.choice([
+            "203.0.113.50", "198.51.100.23", 
+            "185.199.108.153", "104.28.14.74", "45.33.32.156"
+        ])
     return f"{random.randint(1, 223)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(1, 254)}"
 
 

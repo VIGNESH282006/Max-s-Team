@@ -29,7 +29,7 @@ from log_generator import _base_log, _emit, _random_internal_ip, _random_externa
 API_INGEST_URL = "http://127.0.0.1:8000/api/ingest"
 
 # Delay between events in seconds (tune for your demo)
-SLEEP_BETWEEN_EVENTS = 0.5  # Slower stream to watch the dashboard
+SLEEP_BETWEEN_EVENTS = 4.0  # Stream 1 event every 4 seconds
 
 
 def live_log_stream() -> Iterable[dict]:
@@ -40,6 +40,8 @@ def live_log_stream() -> Iterable[dict]:
     # Create persistent attackers for the session so that lateral movement looks connected
     lateral_patient_zero = _random_internal_ip()
     lateral_victims = [_random_internal_ip() for _ in range(5)]
+    
+    last_anomaly_time = 0
 
     while True:
         ts += timedelta(seconds=random.uniform(0.1, 2.0))
@@ -47,12 +49,18 @@ def live_log_stream() -> Iterable[dict]:
         # 85% normal, 7% stolen token, 8% lateral movement
         choice = random.random()
         
+        # Rate limit anomalies to max 1 per 4.5 seconds real-time
+        now = time.time()
+        if choice >= 0.85 and (now - last_anomaly_time) < 4.5:
+            choice = 0.5  # Force normal
+        
         if choice < 0.85:
             # Normal log
             log = _base_log(ts)
             _emit(log)
         elif choice < 0.92:
             # Stolen token
+            last_anomaly_time = now
             log = _base_log(ts)
             log["is_anomaly"] = 1
             log["attack_type"] = "stolen_token"
@@ -66,6 +74,7 @@ def live_log_stream() -> Iterable[dict]:
                 log["dest_port"] = 443
         else:
             # Lateral movement
+            last_anomaly_time = now
             log = _base_log(ts)
             log["is_anomaly"] = 1
             log["attack_type"] = "lateral_movement"
@@ -127,7 +136,7 @@ def main() -> None:
                 f"[{sent:05d}] ANOMALY {incident_id} "
                 f"action={action} "
                 f"latency={latency_ms:.1f}ms "
-                f"total_roi_saved=${roi:,.0f}"
+                f"total_roi_saved=₹{roi:,.0f}"
             )
             if narrative:
                 print(f"         {narrative}")
