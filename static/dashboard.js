@@ -705,9 +705,10 @@
 
   async function fetchState() {
     try {
-      const [stateRes, queueRes] = await Promise.all([
+      const [stateRes, queueRes, verifyRes] = await Promise.all([
         fetch("/api/state"),
         fetch("/api/retraining_queue"),
+        fetch("/api/verify_chain")
       ]);
 
       if (!stateRes.ok) return;
@@ -717,6 +718,25 @@
       if (queueRes.ok) {
         const queue = await queueRes.json();
         renderRetrainingQueue(queue);
+      }
+      
+      if (verifyRes.ok) {
+        const verify = await verifyRes.json();
+        const ledgerStatus = document.getElementById("ledger-status");
+        const ledgerCard = document.getElementById("ledger-card");
+        if (ledgerStatus && ledgerCard) {
+            if (verify.valid) {
+                ledgerStatus.textContent = `Secure (${verify.blocks} Blocks)`;
+                ledgerStatus.style.color = "#10b981";
+                ledgerCard.style.borderLeftColor = "#10b981";
+                ledgerCard.querySelector(".metric-icon-wrap").style.color = "#10b981";
+            } else {
+                ledgerStatus.textContent = "COMPROMISED";
+                ledgerStatus.style.color = "#ef4444";
+                ledgerCard.style.borderLeftColor = "#ef4444";
+                ledgerCard.querySelector(".metric-icon-wrap").style.color = "#ef4444";
+            }
+        }
       }
     } catch (err) { }
   }

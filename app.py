@@ -29,6 +29,7 @@ from flask import Flask, jsonify, request, render_template
 from claude_reasoning import analyze_anomaly
 from train_model import build_features
 from osint import analyze_ioc, get_threat_intelligence
+from blockchain import Blockchain
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -42,6 +43,7 @@ PLAYBOOKS_DIR.mkdir(parents=True, exist_ok=True)
 load_dotenv(override=False)
 
 app = Flask(__name__)
+blockchain = Blockchain()
 
 
 # ---------------------------------------------------------------------------
@@ -326,6 +328,8 @@ def generate_playbook(incident: dict):
         path = PLAYBOOKS_DIR / script_name
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
+        # Add to the cryptographic ledger
+        blockchain.add_block(incident, str(path))
     except Exception as e:
         print(f"Error generating playbook: {e}")
 
@@ -560,6 +564,16 @@ def undo_containment(incident_id: str) -> Any:
     return jsonify({"ok": True, "incident": incident})
 
 
+@app.route("/api/verify_chain", methods=["GET"])
+def verify_chain() -> Any:
+    """Verifies the integrity of the blockchain ledger for SIEM logs and playbooks."""
+    is_valid = blockchain.is_chain_valid()
+    return jsonify({
+        "valid": is_valid,
+        "blocks": len(blockchain.chain)
+    })
+
+
 @app.route("/api/feedback", methods=["POST"])
 def submit_feedback() -> Any:
     """
@@ -719,6 +733,11 @@ def reset_state() -> Any:
     feedback_file = BASE_DIR / "data" / "feedback.jsonl"
     if feedback_file.exists():
         feedback_file.write_text("")
+    # Reset blockchain
+    blockchain.chain = []
+    if blockchain.storage_file.exists():
+        blockchain.storage_file.unlink()
+    blockchain.create_genesis_block()
     return jsonify({"status": "ok", "message": "State cleared."})
 
 
