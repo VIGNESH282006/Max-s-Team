@@ -75,3 +75,5 @@ models/*.joblib
 .env
 .env
 .env
+/playbooks
+/cic dataset
