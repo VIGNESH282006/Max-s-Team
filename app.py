@@ -339,6 +339,12 @@ def index() -> Any:
     return render_template("index.html")
 
 
+@app.route("/login", methods=["GET"])
+def login_page() -> Any:
+    """Serve the SOC Analyst authentication page."""
+    return render_template("login.html")
+
+
 @app.route("/api/ingest", methods=["POST"])
 def ingest() -> Any:
     """
@@ -683,13 +689,37 @@ def state() -> Any:
         key=lambda x: x.get("created_at", ""),
         reverse=True,
     )
+    count = len(INCIDENTS)
+    if count == 0:
+        threat = "Low"
+    elif count <= 2:
+        threat = "Medium"
+    elif count <= 5:
+        threat = "High"
+    else:
+        threat = "Critical"
     return jsonify(
         {
             "total_roi_saved": TOTAL_ROI_SAVED,
-            "incident_count": len(INCIDENTS),
+            "incident_count": count,
+            "threat_level": threat,
             "incidents": incidents_sorted,
         }
     )
+
+
+@app.route("/api/reset", methods=["POST"])
+def reset_state() -> Any:
+    """Clear all in-memory incident state. Useful between demo runs."""
+    global TOTAL_ROI_SAVED, _INCIDENT_COUNTER
+    INCIDENTS.clear()
+    TOTAL_ROI_SAVED = 0.0
+    _INCIDENT_COUNTER = 0
+    # Clear the retraining feedback file
+    feedback_file = BASE_DIR / "data" / "feedback.jsonl"
+    if feedback_file.exists():
+        feedback_file.write_text("")
+    return jsonify({"status": "ok", "message": "State cleared."})
 
 
 if __name__ == "__main__":

@@ -84,6 +84,13 @@ def main() -> None:
     print(f"Streaming live generated events to {API_INGEST_URL}")
     print("Press Ctrl+C to stop.\n")
 
+    # Reset backend state for a clean demo
+    try:
+        requests.post("http://127.0.0.1:8000/api/reset", timeout=3)
+        print("[RESET] Backend state cleared for fresh demo.\n")
+    except Exception:
+        print("[WARN] Could not reset backend state.\n")
+
     sent = 0
     anomalies = 0
 
