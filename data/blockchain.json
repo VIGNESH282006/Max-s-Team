@@ -8857,5 +8857,277 @@
         "playbook_path": "C:\\Users\\2kmax\\OneDrive\\Desktop\\Max-s-Team\\playbooks\\INC-00060_isolate_192.168.142.34.bat",
         "previous_hash": "3f6b8c29a6a20c34e4b349e25ab9e2a34eb236e5d7c37b67629035403b4e920e",
         "hash": "3f5330f68425a9da7e320c4feaff4f12834824434411c8982698a192d76546a5"
+    },
+    {
+        "index": 61,
+        "timestamp": 1773719764.505003,
+        "incident_data": {
+            "incident_id": "INC-00001",
+            "created_at": "2026-03-17T03:56:04.500943+00:00",
+            "log": {
+                "timestamp": "2026-03-17T03:55:40.554770Z",
+                "source_ip": "10.0.172.32",
+                "dest_ip": "10.0.143.237",
+                "src_port": 52344,
+                "dest_port": 443,
+                "protocol": "HTTPS",
+                "user_id": "user_0136",
+                "asset_id": "host-app13",
+                "action": "login",
+                "outcome": "success",
+                "bytes_sent": 5334,
+                "duration_sec": 88.22,
+                "is_anomaly": 1,
+                "attack_type": "stolen_token",
+                "failed_login_attempts": 0,
+                "request_frequency": 1,
+                "user_privilege": "user"
+            },
+            "ml_prediction": 1,
+            "ml_probability": 0.85,
+            "containment_action": "revoke",
+            "threat_level": "High",
+            "attack_type_classification": "Malware Activity",
+            "key_shap_features": [
+                "Geo-location of IP",
+                "Request Frequency",
+                "Source IP Reputation Score",
+                "User Privilege Level",
+                "Packet Size / Payload Length"
+            ],
+            "llm_explanation": "Anomalous event detected for Malware Activity from 10.0.172.32 to 10.0.143.237. The strongest SHAP drivers were Geo-location of IP, Request Frequency, Source IP Reputation Score. Selected containment action: revoke.",
+            "recommended_soc_actions": [
+                "Execute containment action: revoke",
+                "Force credential reset and revoke active sessions",
+                "Review east-west traffic and access to sensitive assets",
+                "Hunt for related indicators across the environment"
+            ],
+            "play_by_play_narrative": "[Auto] Anomaly detected: Malware Activity. Source 10.0.172.32 -> 10.0.143.237. Autonomously executed revoke protocol to neutralize the threat.",
+            "estimated_roi_saved": 1200000,
+            "generated_yara_rule": "rule SOC_Anomaly_MALWARE_ACTIVITY {\n  meta:\n    description = \"Agentic SOC auto-generated rule\"\n  condition:\n    false\n}",
+            "interrogation_log": [
+                "ML model flagged event as anomaly.",
+                "Top SHAP features: Geo-location of IP, Request Frequency, Source IP Reputation Score.",
+                "Attack type inferred: Malware Activity.",
+                "Executed autonomous containment: revoke."
+            ],
+            "status": "contained",
+            "top_features": [
+                {
+                    "feature": "Geo-location of IP",
+                    "raw_feature": "geo_location_of_ip",
+                    "value": 0.9,
+                    "impact": -0.16237701126477988
+                },
+                {
+                    "feature": "Request Frequency",
+                    "raw_feature": "request_frequency",
+                    "value": 1.0,
+                    "impact": -0.1542031939749743
+                },
+                {
+                    "feature": "Source IP Reputation Score",
+                    "raw_feature": "source_ip_reputation_score",
+                    "value": 0.8,
+                    "impact": -0.1430234286739406
+                },
+                {
+                    "feature": "User Privilege Level",
+                    "raw_feature": "user_privilege_level",
+                    "value": 1.0,
+                    "impact": -0.14204040679337848
+                },
+                {
+                    "feature": "Packet Size / Payload Length",
+                    "raw_feature": "packet_size_payload_length",
+                    "value": 5334.0,
+                    "impact": -0.002154515929351645
+                },
+                {
+                    "feature": "Data Transfer Volume",
+                    "raw_feature": "data_transfer_volume",
+                    "value": 5334.0,
+                    "impact": -0.0019373621047377733
+                },
+                {
+                    "feature": "Destination Port",
+                    "raw_feature": "dest_port",
+                    "value": 443.0,
+                    "impact": 0.0008456190477511733
+                },
+                {
+                    "feature": "Connection Duration",
+                    "raw_feature": "connection_duration",
+                    "value": 88.22,
+                    "impact": 0.0007607912458519871
+                },
+                {
+                    "feature": "Failed Login Attempts",
+                    "raw_feature": "failed_login_attempts",
+                    "value": 0.0,
+                    "impact": -0.0003076921380225898
+                },
+                {
+                    "feature": "Protocol Type",
+                    "raw_feature": "protocol_type",
+                    "value": 3.0,
+                    "impact": 0.0
+                }
+            ],
+            "model_signals": {
+                "isolation_forest_outlier": true,
+                "osint_known_bad_ip": false
+            },
+            "osint_findings": [],
+            "osint_severity": "clean",
+            "osint_is_ioc": false,
+            "osint_summary": "Clean - no known threat indicators detected",
+            "pipeline_timing_ms": {
+                "data_fetch_osint": 0.13,
+                "ml_load_train_reason": 396.87,
+                "llm_claude_reasoning": 41.33,
+                "frontend_prepare": 0.08
+            },
+            "pipeline_total_ms": 438.5
+        },
+        "playbook_path": "C:\\Users\\2kmax\\OneDrive\\Desktop\\Max-s-Team\\playbooks\\INC-00001_revoke_user_0136.ps1",
+        "previous_hash": "3f5330f68425a9da7e320c4feaff4f12834824434411c8982698a192d76546a5",
+        "hash": "f51f4ff8a8636b050435d69d9e1e0d6a9486908fb7857fd12c8ed1eda06fd0a2"
+    },
+    {
+        "index": 62,
+        "timestamp": 1773719764.5461922,
+        "incident_data": {
+            "incident_id": "INC-00002",
+            "created_at": "2026-03-17T03:56:04.533008+00:00",
+            "log": {
+                "timestamp": "2026-03-17T03:55:39.667229Z",
+                "source_ip": "10.0.203.147",
+                "dest_ip": "192.168.72.133",
+                "src_port": 55699,
+                "dest_port": 443,
+                "protocol": "RDP",
+                "user_id": "user_0061",
+                "asset_id": "host-svc14",
+                "action": "dns_query",
+                "outcome": "success",
+                "bytes_sent": 44579,
+                "duration_sec": 57.76,
+                "is_anomaly": 0,
+                "attack_type": "lateral_movement",
+                "failed_login_attempts": 0,
+                "request_frequency": 1,
+                "user_privilege": "user"
+            },
+            "ml_prediction": 1,
+            "ml_probability": 0.85,
+            "containment_action": "isolate",
+            "threat_level": "High",
+            "attack_type_classification": "Malware Activity",
+            "key_shap_features": [
+                "Geo-location of IP",
+                "Request Frequency",
+                "User Privilege Level",
+                "Source IP Reputation Score",
+                "Packet Size / Payload Length"
+            ],
+            "llm_explanation": "Anomalous event detected for Malware Activity from 10.0.203.147 to 192.168.72.133. The strongest SHAP drivers were Geo-location of IP, Request Frequency, User Privilege Level. Selected containment action: isolate.",
+            "recommended_soc_actions": [
+                "Execute containment action: isolate",
+                "Block or quarantine the suspicious source host/IP",
+                "Review east-west traffic and access to sensitive assets",
+                "Hunt for related indicators across the environment"
+            ],
+            "play_by_play_narrative": "[Auto] Anomaly detected: Malware Activity. Source 10.0.203.147 -> 192.168.72.133. Autonomously executed isolate protocol to neutralize the threat.",
+            "estimated_roi_saved": 1200000,
+            "generated_yara_rule": "rule SOC_Anomaly_MALWARE_ACTIVITY {\n  meta:\n    description = \"Agentic SOC auto-generated rule\"\n  condition:\n    false\n}",
+            "interrogation_log": [
+                "ML model flagged event as anomaly.",
+                "Top SHAP features: Geo-location of IP, Request Frequency, User Privilege Level.",
+                "Attack type inferred: Malware Activity.",
+                "Executed autonomous containment: isolate."
+            ],
+            "status": "contained",
+            "top_features": [
+                {
+                    "feature": "Geo-location of IP",
+                    "raw_feature": "geo_location_of_ip",
+                    "value": 0.9,
+                    "impact": -0.1632703553102963
+                },
+                {
+                    "feature": "Request Frequency",
+                    "raw_feature": "request_frequency",
+                    "value": 1.0,
+                    "impact": -0.1540452483493686
+                },
+                {
+                    "feature": "User Privilege Level",
+                    "raw_feature": "user_privilege_level",
+                    "value": 1.0,
+                    "impact": -0.1471192263147405
+                },
+                {
+                    "feature": "Source IP Reputation Score",
+                    "raw_feature": "source_ip_reputation_score",
+                    "value": 0.8,
+                    "impact": -0.1426585540355045
+                },
+                {
+                    "feature": "Packet Size / Payload Length",
+                    "raw_feature": "packet_size_payload_length",
+                    "value": 44579.0,
+                    "impact": 0.0015263374161982113
+                },
+                {
+                    "feature": "Connection Duration",
+                    "raw_feature": "connection_duration",
+                    "value": 57.76,
+                    "impact": 0.0010034603282830605
+                },
+                {
+                    "feature": "Destination Port",
+                    "raw_feature": "dest_port",
+                    "value": 443.0,
+                    "impact": 0.0008456190477511733
+                },
+                {
+                    "feature": "Data Transfer Volume",
+                    "raw_feature": "data_transfer_volume",
+                    "value": 44579.0,
+                    "impact": -0.0007780732478670964
+                },
+                {
+                    "feature": "Failed Login Attempts",
+                    "raw_feature": "failed_login_attempts",
+                    "value": 0.0,
+                    "impact": -0.000207646375307034
+                },
+                {
+                    "feature": "Protocol Type",
+                    "raw_feature": "protocol_type",
+                    "value": 5.0,
+                    "impact": 0.0
+                }
+            ],
+            "model_signals": {
+                "isolation_forest_outlier": true,
+                "osint_known_bad_ip": false
+            },
+            "osint_findings": [],
+            "osint_severity": "clean",
+            "osint_is_ioc": false,
+            "osint_summary": "Clean - no known threat indicators detected",
+            "pipeline_timing_ms": {
+                "data_fetch_osint": 0.11,
+                "ml_load_train_reason": 490.71,
+                "llm_claude_reasoning": 33.65,
+                "frontend_prepare": 0.08
+            },
+            "pipeline_total_ms": 524.62
+        },
+        "playbook_path": "C:\\Users\\2kmax\\OneDrive\\Desktop\\Max-s-Team\\playbooks\\INC-00002_isolate_10.0.203.147.bat",
+        "previous_hash": "f51f4ff8a8636b050435d69d9e1e0d6a9486908fb7857fd12c8ed1eda06fd0a2",
+        "hash": "d9bddc4acfecab7c791515fee0688cbab97340217c5d61ea675cccfdcde033b5"
     }
 ]
