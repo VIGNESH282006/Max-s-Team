@@ -7,6 +7,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="/static/style.css" />
   <link rel="stylesheet" href="https://unpkg.com/vis-network/styles/vis-network.min.css" />
+  <script>
+    // Quick session check before page loads
+    const session = JSON.parse(localStorage.getItem('soc_session'));
+    if (!session || Date.now() > session.expire) {
+      window.location.href = '/login';
+    }
+  </script>
 </head>
 <body>
   <button type="button" class="menu-toggle" id="menu-toggle" aria-label="Open menu">
@@ -40,12 +47,16 @@
         </li>
       </ul>
       
-      <!-- Uptime at the bottom of sidebar -->
+      <!-- Uptime and Logout -->
       <div class="sidebar-footer">
         <div class="uptime-widget">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           <span id="uptime">00:00:00</span>
         </div>
+        <button id="logout-btn" class="logout-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Logout Analyst
+        </button>
       </div>
     </nav>
 
@@ -55,29 +66,44 @@
       <!-- Top Metrics Bar (Persistent) -->
       <header class="top-bar">
         <div class="metric-card accent">
+        <div class="metric-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div class="metric-info">
           <span class="metric-label">Incidents</span>
-          <span id="incident-count" class="metric-value">0</span>
+          <span class="metric-value" id="total-incidents">0</span>
         </div>
-        <div class="metric-card success">
+      </div>
+
+      <div class="metric-card success">
+        <div class="metric-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <div class="metric-info">
           <span class="metric-label">Avg. ROI Saved</span>
-          <span id="roi-saved" class="metric-value">$0</span>
+          <span class="metric-value" id="total-roi">$0</span>
         </div>
-        <div class="metric-card warning">
+      </div>
+
+      <div class="metric-card warning">
+        <div class="metric-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div class="metric-info">
           <span class="metric-label">Threat Level</span>
-          <span id="threat-level" class="metric-value">
-            <div class="threat-indicator">
-              <span class="threat-label" id="threat-label">Low</span>
-              <div class="threat-dots">
-                <div class="threat-dot" data-level="1"></div>
-                <div class="threat-dot" data-level="2"></div>
-                <div class="threat-dot" data-level="3"></div>
-                <div class="threat-dot" data-level="4"></div>
-                <div class="threat-dot" data-level="5"></div>
-              </div>
+          <div class="threat-indicator">
+            <span class="threat-label" id="threat-level">Low</span>
+            <div class="threat-dots-wrap">
+              <span class="threat-dot"></span>
+              <span class="threat-dot"></span>
+              <span class="threat-dot"></span>
+              <span class="threat-dot"></span>
+              <span class="threat-dot"></span>
             </div>
-          </span>
+          </div>
         </div>
-      </header>
+      </div>
+    </header>
 
       <!-- TAB 1: Analytics & Topology -->
       <section id="tab-analytics" class="tab-content active">
@@ -98,7 +124,10 @@
           </div>
 
           <div id="graph-wrapper">
-            <div id="network"></div>
+            <div id="graph-skeleton" class="skeleton-container" style="padding: 40px; height: 100%;">
+                <div class="skeleton" style="height: 100%; border-radius: 12px;"></div>
+            </div>
+            <div id="network" class="hidden"></div>
             <div id="containment-overlay" class="containment-overlay hidden"></div>
           </div>
 
@@ -123,7 +152,12 @@
               <span class="panel-badge live" id="feed-badge">Monitoring</span>
             </div>
             <div id="feed" class="feed">
-              <div class="feed-empty">
+              <div id="feed-skeleton" class="skeleton-container">
+                  <div class="skeleton-card skeleton"></div>
+                  <div class="skeleton-card skeleton"></div>
+                  <div class="skeleton-card skeleton"></div>
+              </div>
+              <div class="feed-empty hidden">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
                 Listening for events...
               </div>
@@ -136,7 +170,13 @@
               <h2>Detection Explanation</h2>
             </div>
             <div id="explanation-box" class="explanation-box">
-              <div class="feed-empty">Select or wait for an incident to view its detailed breakdown.</div>
+              <div id="explanation-skeleton" class="skeleton-container">
+                  <div class="skeleton-title skeleton"></div>
+                  <div class="skeleton-text skeleton"></div>
+                  <div class="skeleton-text skeleton"></div>
+                  <div class="skeleton-card skeleton"></div>
+              </div>
+              <div class="feed-empty hidden">Select or wait for an incident to view its detailed breakdown.</div>
             </div>
           </div>
         </div>

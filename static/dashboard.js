@@ -13,10 +13,10 @@
   const yaraEl = document.getElementById("yara");
   const undoBtn = document.getElementById("undo-btn");
   const undoStatus = document.getElementById("undo-status");
-  const incidentCountEl = document.getElementById("incident-count");
-  const roiEl = document.getElementById("roi-saved");
+  const totalIncidentsEl = document.getElementById("total-incidents");
+  const totalRoiEl = document.getElementById("total-roi");
+  const threatLevelEl = document.getElementById("threat-level");
   const statusBeacon = document.getElementById("status-beacon");
-  const threatLabel = document.getElementById("threat-label");
   const threatDots = document.querySelectorAll(".threat-dot");
   const uptimeEl = document.getElementById("uptime");
   const interrogationLog = document.getElementById("interrogation-log");
@@ -43,6 +43,8 @@
   const queueAnomalyCountEl = document.getElementById("queue-anomaly-count");
   const queueNormalCountEl = document.getElementById("queue-normal-count");
   const retrainingQueueListEl = document.getElementById("retraining-queue-list");
+  
+  let skeletonsRevealed = false;
 
   let latestIncidentId = null;
   let seenIncidents = new Set();
@@ -135,6 +137,17 @@
     else openSidebar();
   });
   sidebarOverlay.addEventListener("click", closeSidebar);
+
+  // ---------------------------------------------------------------------------
+  // Logout
+  // ---------------------------------------------------------------------------
+  const logoutBtn = document.getElementById("logout-btn");
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", () => {
+      localStorage.removeItem("soc_session");
+      window.location.href = "/login";
+    });
+  }
 
   // ---------------------------------------------------------------------------
   // Tab Switching Logic
@@ -328,8 +341,8 @@
     autoResize: true,
     physics: {
       enabled: true,
-      stabilization: { iterations: 120 },
-      barnesHut: { gravitationalConstant: -4000, centralGravity: 0.25, springLength: 160, springConstant: 0.035, damping: 0.1 },
+      stabilization: { iterations: 200, fit: true },
+      barnesHut: { gravitationalConstant: -3000, centralGravity: 0.5, springLength: 140, springConstant: 0.04, damping: 0.15 },
     },
     nodes: { shape: "dot", size: 28, borderWidth: 3, font: { color: "#334155", size: 11, face: "Inter", multi: "md", strokeWidth: 0 } },
     groups: {
@@ -342,33 +355,38 @@
 
   const network = new vis.Network(networkContainer, { nodes, edges }, graphOptions);
 
+  // Center and fit graph after physics stabilizes
+  network.once('stabilized', () => {
+    network.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
+    // Disable physics after stabilization to keep nodes fixed in place
+    network.setOptions({ physics: { enabled: false } });
+  });
+
   function setGraphHealthy() {
     nodes.update({ id: 1, color: { background: "#dbeafe", border: "#2563eb" } });
     [2, 3, 4, 5].forEach((id) => { nodes.update({ id, color: { background: "#f1f5f9", border: "#94a3b8" } }); });
     edges.forEach((edge) => { edges.update({ id: edge.id, color: { color: "#cbd5e1" }, width: 1.5, dashes: false, arrows: { to: { enabled: false } } }); });
-    overlay.classList.add("hidden");
-    statusBeacon.classList.remove("danger");
-    graphBadge.textContent = "Live";
-    graphBadge.className = "panel-badge live";
-    graphStatusEl.className = "graph-status";
-    graphStatusText.innerHTML = '<strong>Status: All Clear.</strong> The enterprise network topology shows 5 interconnected systems. No anomalies detected.';
+    if (overlay) overlay.classList.add("hidden");
+    if (statusBeacon) statusBeacon.classList.remove("danger");
+    if (graphBadge) { graphBadge.textContent = "Live"; graphBadge.className = "panel-badge live"; }
+    if (graphStatusEl) graphStatusEl.className = "graph-status";
+    if (graphStatusText) graphStatusText.innerHTML = '<strong>Status: All Clear.</strong> The enterprise network topology shows 5 interconnected systems. No anomalies detected.';
   }
 
   function setGraphAnomalous(containmentAction, incident) {
     nodes.update({ id: 1, color: { background: "#fecaca", border: "#dc2626" } });
     [2, 3].forEach((id) => { nodes.update({ id, color: { background: "#fef3c7", border: "#f59e0b" } }); });
     ["e1-2", "e1-3"].forEach((eid) => { edges.update({ id: eid, color: { color: "#dc2626" }, width: 2.5, dashes: [6, 3], arrows: { to: { enabled: true, scaleFactor: 0.8 } } }); });
-    statusBeacon.classList.add("danger");
-    graphBadge.textContent = "Threat";
-    graphBadge.className = "panel-badge danger";
-    if (containmentAction === "isolate" || containmentAction === "revoke") { overlay.classList.remove("hidden"); } else { overlay.classList.add("hidden"); }
+    if (statusBeacon) statusBeacon.classList.add("danger");
+    if (graphBadge) { graphBadge.textContent = "Threat"; graphBadge.className = "panel-badge danger"; }
+    if (containmentAction === "isolate" || containmentAction === "revoke") { if (overlay) overlay.classList.remove("hidden"); } else { if (overlay) overlay.classList.add("hidden"); }
     const attackType = incident?.log?.attack_type || "unknown";
     const sourceIp = incident?.log?.source_ip || "unknown";
     const destIp = incident?.log?.dest_ip || "unknown";
     const protocol = incident?.log?.protocol || "unknown";
     const containmentText = containmentAction === "isolate" ? "Network isolation has been activated." : containmentAction === "revoke" ? "Token revocation is in effect." : "Traffic routed to honeypot.";
-    graphStatusEl.className = "graph-status danger";
-    graphStatusText.innerHTML = `<strong>Alert: ${attackType.replace("_", " ").toUpperCase()} detected.</strong> Source <strong>${sourceIp}</strong> attacked <strong>${destIp}</strong> via <strong>${protocol}</strong>. ${containmentText}`;
+    if (graphStatusEl) graphStatusEl.className = "graph-status danger";
+    if (graphStatusText) graphStatusText.innerHTML = `<strong>Alert: ${attackType.replace("_", " ").toUpperCase()} detected.</strong> Source <strong>${sourceIp}</strong> attacked <strong>${destIp}</strong> via <strong>${protocol}</strong>. ${containmentText}`;
   }
 
   setGraphHealthy();
@@ -383,9 +401,13 @@
     else if (anomalyCount <= 5) { level = 3; label = "High"; colorClass = "high"; }
     else { level = 5; label = "Critical"; colorClass = "crit"; }
 
-    threatLabel.textContent = label;
-    threatLabel.style.color = colorClass === "low" ? "#10b981" : colorClass === "med" ? "#f59e0b" : colorClass === "high" ? "#f97316" : "#ef4444";
+    // Update the threat level text in the metric card
+    if (threatLevelEl) {
+      threatLevelEl.textContent = label;
+      threatLevelEl.style.color = colorClass === "low" ? "#10b981" : colorClass === "med" ? "#f59e0b" : colorClass === "high" ? "#f97316" : "#ef4444";
+    }
 
+    // Update threat dots (star indicators)
     threatDots.forEach((dot, i) => {
       dot.className = "threat-dot";
       if (i < level) { dot.classList.add("active", colorClass); }
@@ -709,17 +731,91 @@
   }
 
   function renderState(state) {
-    const incidents = state.incidents || [];
-    const count = state.incident_count || incidents.length || 0;
-    const roi = state.total_roi_saved || 0;
+    // Hide skeletons after a small delay to ensure they are seen (Only run once)
+    if (!skeletonsRevealed) {
+      setTimeout(() => {
+        const skeletons = [
+            "graph-skeleton", "feed-skeleton", "explanation-skeleton"
+        ];
+        skeletons.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.add("hidden");
+        });
+        const networkEl = document.getElementById("network");
+        if (networkEl) networkEl.classList.remove("hidden");
+        // Fit the graph now that the container is visible
+        if (network) {
+          setTimeout(() => {
+            network.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
+          }, 50);
+        }
+        const feedEmpties = document.querySelectorAll(".feed-empty");
+        feedEmpties.forEach(el => el.classList.remove("hidden"));
+        skeletonsRevealed = true;
+      }, 1500); // 1.5s delay for skeleton visibility
+    }
 
-    if (count !== prevCount) { animateValue(incidentCountEl, prevCount, count, 600); prevCount = count; }
-    if (roi !== prevRoi) { animateValue(roiEl, prevRoi, roi, 800, formatCurrency); prevRoi = roi; }
+    const incidents = state.incidents || [];
+    const count = incidents.length || 0;
+    const roi = state.total_roi_saved || 0;
+    const threat = state.threat_level || "Low";
+
+    // If backend has no incidents but frontend still has stale state, reset everything
+    if (count === 0 && seenIncidents.size > 0) {
+      seenIncidents.clear();
+      totalAnomalies = 0;
+      prevCount = 0;
+      prevRoi = 0;
+      firstFeedEntry = true;
+      incidentStore = {};
+      latestIncidentId = null;
+      lastPipelineIncidentId = null;
+      // Clear the feed
+      if (feedEl) {
+        const feedEmpty = feedEl.querySelector('.feed-empty');
+        feedEl.innerHTML = '';
+        if (feedEmpty) { feedEl.appendChild(feedEmpty); feedEmpty.classList.remove('hidden'); }
+      }
+      // Clear explanation box
+      if (explanationBox) {
+        const explEmpty = explanationBox.querySelector('.feed-empty');
+        explanationBox.innerHTML = '';
+        if (explEmpty) { explanationBox.appendChild(explEmpty); explEmpty.classList.remove('hidden'); }
+      }
+      // Clear interrogation log
+      if (interrogationLog) {
+        interrogationLog.innerHTML = '<li class="feed-empty">Waiting for anomaly detection...</li>';
+      }
+    }
+
+    if (totalIncidentsEl) {
+      if (count !== prevCount) {
+        animateValue(totalIncidentsEl, prevCount, count, 600);
+        prevCount = count;
+      } else {
+        totalIncidentsEl.textContent = String(count);
+      }
+    }
+
+    if (totalRoiEl) {
+      if (roi !== prevRoi) {
+        animateValue(totalRoiEl, prevRoi, roi, 800, formatCurrency);
+        prevRoi = roi;
+      } else {
+        totalRoiEl.textContent = `$${roi.toLocaleString()}`;
+      }
+    }
+
+    if (threatLevelEl) {
+      threatLevelEl.textContent = threat;
+      const indicatorLabel = threatLevelEl.closest('.metric-card')?.querySelector('.threat-label');
+      if (indicatorLabel) indicatorLabel.textContent = threat;
+    }
 
     if (!incidents.length) {
       setGraphHealthy();
-      yaraEl.textContent = "No rules generated yet.";
-      undoBtn.disabled = true;
+      if (yaraEl) yaraEl.textContent = "No rules generated yet.";
+      if (undoBtn) undoBtn.disabled = true;
       latestIncidentId = null;
       updateThreatLevel(0);
       setPipelineIdle();
@@ -731,8 +827,8 @@
     latestIncidentId = latest.incident_id;
 
     if (containmentAction === "undo") { setGraphHealthy(); } else { setGraphAnomalous(containmentAction, latest); }
-    if (latest.generated_yara_rule) { yaraEl.textContent = latest.generated_yara_rule; }
-    undoBtn.disabled = !latestIncidentId;
+    if (latest.generated_yara_rule && yaraEl) { yaraEl.textContent = latest.generated_yara_rule; }
+    if (undoBtn) undoBtn.disabled = !latestIncidentId;
 
     for (let i = incidents.length - 1; i >= 0; i--) {
       const inc = incidents[i];
