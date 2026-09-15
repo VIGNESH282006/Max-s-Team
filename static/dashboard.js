@@ -43,6 +43,17 @@
   const queueAnomalyCountEl = document.getElementById("queue-anomaly-count");
   const queueNormalCountEl = document.getElementById("queue-normal-count");
   const retrainingQueueListEl = document.getElementById("retraining-queue-list");
+
+  // Defensive cleanup: remove old blockchain ledger card if a stale cached
+  // HTML version is loaded in the browser.
+  const staleLedgerCard = document.getElementById("ledger-card");
+  if (staleLedgerCard && staleLedgerCard.parentNode) {
+    staleLedgerCard.parentNode.removeChild(staleLedgerCard);
+  }
+  const staleLedgerStatus = document.getElementById("ledger-status");
+  if (staleLedgerStatus && staleLedgerStatus.parentNode) {
+    staleLedgerStatus.parentNode.removeChild(staleLedgerStatus);
+  }
   
   let skeletonsRevealed = false;
 
@@ -705,10 +716,9 @@
 
   async function fetchState() {
     try {
-      const [stateRes, queueRes, verifyRes] = await Promise.all([
+      const [stateRes, queueRes] = await Promise.all([
         fetch("/api/state"),
-        fetch("/api/retraining_queue"),
-        fetch("/api/verify_chain")
+        fetch("/api/retraining_queue")
       ]);
 
       if (!stateRes.ok) return;
@@ -718,25 +728,6 @@
       if (queueRes.ok) {
         const queue = await queueRes.json();
         renderRetrainingQueue(queue);
-      }
-      
-      if (verifyRes.ok) {
-        const verify = await verifyRes.json();
-        const ledgerStatus = document.getElementById("ledger-status");
-        const ledgerCard = document.getElementById("ledger-card");
-        if (ledgerStatus && ledgerCard) {
-            if (verify.valid) {
-                ledgerStatus.textContent = `Secure (${verify.blocks} Blocks)`;
-                ledgerStatus.style.color = "#10b981";
-                ledgerCard.style.borderLeftColor = "#10b981";
-                ledgerCard.querySelector(".metric-icon-wrap").style.color = "#10b981";
-            } else {
-                ledgerStatus.textContent = "COMPROMISED";
-                ledgerStatus.style.color = "#ef4444";
-                ledgerCard.style.borderLeftColor = "#ef4444";
-                ledgerCard.querySelector(".metric-icon-wrap").style.color = "#ef4444";
-            }
-        }
       }
     } catch (err) { }
   }
