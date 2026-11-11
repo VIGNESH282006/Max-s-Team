@@ -1,16 +1,22 @@
-# React + Vite
+# Agentic SOC Console (React)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Analyst dashboard for the Agentic SOC detection API.
 
-Currently, two official plugins are available:
+## Run it
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. Start the API from the project root: `python app.py` (serves on port 8000).
+2. In this folder: `npm install` (first time only), then `npm run dev`.
+3. Open http://localhost:5173 and sign in with any username and a password of 4+ characters.
+4. Click **Stream demo traffic** to send sample logs through the pipeline.
 
-## React Compiler
+Vite forwards every `/api` request to `http://localhost:8000`, so no CORS setup is needed.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Screens
 
-## Expanding the ESLint configuration
+- **Overview** – KPIs, containment actions, attack types, time per pipeline stage, latest incidents.
+- **Incidents** – full investigation: pipeline trace with timings, SHAP chart, OSINT matches,
+  LLM briefing and reasoning, YARA rule, and analyst actions (confirm, false positive, undo).
+- **Attack graph** – hosts and flagged traffic, coloured by the containment applied.
+- **Learning loop** – analyst corrections waiting for retraining and the model configuration.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Fonts are bundled locally, so the console works with no internet connection during a demo.

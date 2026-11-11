@@ -1,7 +1,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// https://vite.dev/config/
+// The Flask API (app.py) runs on port 8000. Vite forwards /api calls to it,
+// so the dashboard and API share one origin during development and demos.
 export default defineConfig({
   plugins: [react()],
+  server: {
+    port: 5173,
+    proxy: { '/api': { target: 'http://localhost:8000', changeOrigin: true } },
+  },
 })
